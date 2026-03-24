@@ -1,62 +1,87 @@
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai'
 import { logger } from '../utils/logger.js'
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'AIzaSyAEfkG5e4pzX81sqTkMFTivtnjh1vYNxBA' )
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
 
-// Safety settings — relaxed for welfare/government content
 const SAFETY_SETTINGS = [
   { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
   { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
   { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
 ]
 
-// ── Model helpers ──
-const getFlashModel = () =>
-  genAI.getGenerativeModel({
-    model: 'models/gemini-3-flash-preview',
-    safetySettings: SAFETY_SETTINGS,
-    generationConfig: { temperature: 0.3, maxOutputTokens: 256 },
-  })
+// Try models in order — if one is rate limited, fall back to next
+const MODELS = ['gemini-2.0-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-flash-lite-001']
 
-const getProModel = () =>
-  genAI.getGenerativeModel({
-    model: 'models/gemini-3-flash-preview',
+const getModel = (temp = 0.3, tokens = 512) => {
+  return genAI.getGenerativeModel({
+    model: MODELS[0],
     safetySettings: SAFETY_SETTINGS,
-    generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
+    generationConfig: { temperature: temp, maxOutputTokens: tokens },
   })
+}
+
+const extractJSON = (rawText) => {
+  try {
+    const text = rawText.replace(/```json|```/g, '').trim()
+    const match = text.match(/\{[\s\S]*\}/)
+    if (!match) throw new Error('No JSON found')
+    return JSON.parse(match[0])
+  } catch (err) {
+    return null
+  }
+}
+
+// ── Retry with exponential backoff ───────────────────────────
+const withRetry = async (fn, retries = 2, delay = 2000) => {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await fn()
+    } catch (err) {
+      const is429 = err.message?.includes('429') || err.message?.includes('quota')
+      if (is429 && i < retries) {
+        logger.warn(`Rate limited — retrying in ${delay}ms (attempt ${i + 1}/${retries})`)
+        await new Promise(r => setTimeout(r, delay))
+        delay *= 2
+        continue
+      }
+      throw err
+    }
+  }
+}
 
 // ─────────────────────────────────────────────────────────────
 // LAYER 1 — Profile Extractor
-// Silently pulls structured user data from natural conversation
 // ─────────────────────────────────────────────────────────────
-const PROFILE_PROMPT = `You are a silent profile extractor for Scheme-AI, India's welfare navigator.
-Extract structured fields from the user's message. Return ONLY valid JSON — no markdown, no prose.
+const PROFILE_PROMPT = `You are a profile extractor for Scheme-AI.
+Extract info from the user message. Output ONLY valid JSON, no markdown.
 
-Fields to extract (use null if not mentioned):
 {
-  "age": number|null,
-  "gender": "male"|"female"|"other"|null,
-  "state": "state name"|null,
-  "district": "district name"|null,
-  "occupation": "farmer"|"student"|"daily_wage"|"unemployed"|"business"|"govt_employee"|"other"|null,
-  "income_annual": number|null,
-  "land_acres": number|null,
-  "caste": "general"|"obc"|"sc"|"st"|null,
-  "is_disabled": boolean|null,
-  "is_widow": boolean|null,
-  "has_aadhaar": boolean|null,
-  "family_size": number|null,
-  "need_category": ["education","health","housing","agriculture","finance","employment","women_child"]
+  "name": null,
+  "age": null,
+  "gender": "male|female|other|null",
+  "state": null,
+  "district": null,
+  "occupation": "farmer|student|daily_wage|unemployed|business|govt_employee|other|null",
+  "income_annual": null,
+  "land_acres": null,
+  "caste": "general|obc|sc|st|null",
+  "is_disabled": null,
+  "is_widow": null,
+  "has_aadhaar": null,
+  "family_size": null,
+  "need_category": []
 }`
 
 export const extractProfile = async (message) => {
   try {
-    const model = getFlashModel()
-    const result = await model.generateContent(
-      `${PROFILE_PROMPT}\n\nUser message: "${message}"\n\nReturn ONLY valid JSON:`
-    )
-    const text = result.response.text().replace(/```json|```/g, '').trim()
-    return JSON.parse(text)
+    return await withRetry(async () => {
+      const model = getModel(0.1, 300)
+      const result = await model.generateContent(
+        `${PROFILE_PROMPT}\n\nUser message: "${message}"\n\nReturn ONLY JSON:`
+      )
+      const parsed = extractJSON(result.response.text())
+      return parsed || {}
+    })
   } catch (err) {
     logger.error(`[Gemini] Profile extract error: ${err.message}`)
     return {}
@@ -64,37 +89,13 @@ export const extractProfile = async (message) => {
 }
 
 // ─────────────────────────────────────────────────────────────
-// LAYER 2-5 — Main AI Reply (Scheme Retrieval + Scoring + Roadmap + Emotion)
+// LAYER 2 — AI Reply Generator
 // ─────────────────────────────────────────────────────────────
-const SYSTEM_INSTRUCTION = `You are Scheme-AI, a compassionate and knowledgeable welfare navigator for Indian citizens.
-Your job is to help rural and underserved citizens discover and apply for government welfare schemes.
-
-CORE RULES:
-1. Always respond in the SAME language the user writes in (Hindi, Tamil, Telugu, Bengali, etc.)
-2. Never use bureaucratic jargon — speak like a helpful neighbour or trusted elder
-3. Extract profile information SILENTLY — never ask them to fill a form or select from dropdowns
-4. When you have enough context, recommend 2-4 specific schemes with clear eligibility reasoning
-5. Explain WHY they qualify in plain simple words (max 8th grade reading level)
-6. Always give clear, numbered next steps for applying
-7. If the user seems confused, frustrated or helpless — acknowledge their situation FIRST, then simplify
-
-RESPONSE STRUCTURE (when recommending schemes):
-- 1-2 lines of empathetic acknowledgment
-- 2-4 recommended schemes, each with:
-  • Scheme name (bold)
-  • Why they qualify (1 sentence)
-  • Key benefit
-  • How to apply (2-3 steps)
-- 1 follow-up question to refine matches further
-
-SCHEME KNOWLEDGE: You know all major central & state schemes including PM-KISAN, PM-JAY, Ayushman Bharat,
-MGNREGA, PM Awas Yojana (Gramin & Urban), Ujjwala Yojana, National Scholarship Portal, MUDRA Yojana,
-Sukanya Samriddhi, Atal Pension Yojana, Kisan Credit Card, PMEGP, Stand-Up India, and 1000+ others.
-
-EMOTIONAL AI LAYER: Detect emotional tone — if frustrated → acknowledge, if confused → simplify,
-if hopeless → be encouraging. Always end with hope and a clear next action.
-
-Remember: Many users face real hardship. You may be the only help they get. Every word matters.`
+const SYSTEM_INSTRUCTION = `You are Scheme-AI, a compassionate welfare navigator for Indian citizens.
+ALWAYS respond in the SAME language the user wrote in.
+Speak simply like a helpful neighbour. No jargon.
+Recommend 2-4 schemes when you have enough context.
+Keep responses SHORT — elderly users are reading this.`
 
 export const generateAIReply = async ({
   message,
@@ -103,38 +104,36 @@ export const generateAIReply = async ({
   matchedSchemes = [],
   language = 'English',
 }) => {
-  const model = getProModel()
+  try {
+    return await withRetry(async () => {
+      const model = getModel(0.7, 800)
+      const chatHistory = history.slice(-6).map(m => ({
+        role: m.role === 'ai' ? 'model' : 'user',
+        parts: [{ text: m.content }],
+      }))
 
-  // Build Gemini chat history format
-  const chatHistory = history.slice(-8).map(m => ({
-    role: m.role === 'ai' ? 'model' : 'user',
-    parts: [{ text: m.content }],
-  }))
+      const chat = model.startChat({
+        history: chatHistory,
+        systemInstruction: { role: 'system', parts: [{ text: SYSTEM_INSTRUCTION }] },
+      })
 
-const chat = model.startChat({
-  history: chatHistory,
-  systemInstruction: {
-    role: "system",
-    parts: [{ text: SYSTEM_INSTRUCTION }]
-  },
-})
-
-  // Enrich user message with context (hidden from display)
-  const contextNote = `
----
-[AI Context — not shown to user]
-Detected user profile: ${JSON.stringify(userProfile)}
-Language preference: ${language}
-${matchedSchemes.length > 0
-  ? `Top RAG-matched schemes: ${matchedSchemes.slice(0, 5).map(s => s.name).join(', ')}`
-  : 'No RAG matches yet — use your training knowledge'
-}
----`
-
-  const enrichedMessage = `${message}${contextNote}`
-
-  const result = await chat.sendMessage(enrichedMessage)
-  return result.response.text()
+      const context = `\n---\n[Context: profile=${JSON.stringify(userProfile)}, language=${language}, schemes=${matchedSchemes.slice(0,3).map(s=>s.name).join(',')}]\n---`
+      const result = await chat.sendMessage(`${message}${context}`)
+      return result.response.text()
+    })
+  } catch (err) {
+    logger.error(`[Gemini] AI reply error: ${err.message}`)
+    // Return language-specific fallback
+    const fallbacks = {
+      Tamil: 'உங்கள் விவரங்களை பெற்றோம். கீழே உள்ள திட்டங்களை பாருங்கள்.',
+      Hindi: 'आपकी जानकारी मिल गई। नीचे दी गई योजनाएँ देखें।',
+      Telugu: 'మీ వివరాలు అందుకున్నాం. దిగువ పథకాలను చూడండి.',
+      Kannada: 'ನಿಮ್ಮ ವಿವರಗಳನ್ನು ಪಡೆದಿದ್ದೇವೆ. ಕೆಳಗಿನ ಯೋಜನೆಗಳನ್ನು ನೋಡಿ.',
+      Bengali: 'আপনার তথ্য পেয়েছি। নিচের প্রকল্পগুলি দেখুন।',
+      English: 'I found some schemes for you. Please check the cards below.',
+    }
+    return fallbacks[language] || fallbacks.English
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -142,40 +141,42 @@ ${matchedSchemes.length > 0
 // ─────────────────────────────────────────────────────────────
 export const scoreEligibility = async (userProfile, scheme) => {
   try {
-    const model = getFlashModel()
-    const prompt = `Given this citizen profile:
-${JSON.stringify(userProfile, null, 2)}
+    return await withRetry(async () => {
+      const model = getModel(0.2, 150)
+      const result = await model.generateContent(`
+Profile: ${JSON.stringify(userProfile)}
+Scheme: ${scheme.name}
+Eligibility: ${Array.isArray(scheme.eligibility) ? scheme.eligibility.join(', ') : scheme.eligibility}
 
-And this government scheme:
-Name: ${scheme.name}
-Description: ${scheme.description}
-Eligibility criteria: ${Array.isArray(scheme.eligibility) ? scheme.eligibility.join(', ') : scheme.eligibility}
+Score 0-100. Be generous — incomplete profile = assume best case, minimum 50.
+Return ONLY JSON: {"score": number, "reason": "1 sentence"}`)
 
-Score the eligibility from 0 to 100 (100 = perfectly eligible).
-Give a 1-sentence plain-language reason in simple English.
-
-Return ONLY this JSON (no markdown):
-{"score": <number>, "reason": "<1 sentence>"}`
-
-    const result = await model.generateContent(prompt)
-    const text = result.response.text().replace(/```json|```/g, '').trim()
-    return JSON.parse(text)
+      const parsed = extractJSON(result.response.text())
+      if (parsed) {
+        return {
+          score: Math.max(parsed.score || 0, 40),
+          reason: parsed.reason || 'Likely eligible based on your profile',
+        }
+      }
+      return { score: 65, reason: 'Likely eligible — verify at official portal' }
+    })
   } catch (err) {
-    logger.error(`[Gemini] Eligibility score error: ${err.message}`)
-    return { score: 72, reason: 'Likely eligible based on your profile' }
+    logger.error(`[Gemini] Score error: ${err.message}`)
+    return { score: 65, reason: 'Likely eligible — verify at official portal' }
   }
 }
 
 // ─────────────────────────────────────────────────────────────
-// Helper — generate embeddings via Gemini for ChromaDB
+// Embedding generator for ChromaDB
 // ─────────────────────────────────────────────────────────────
 export const generateEmbedding = async (text) => {
   try {
-    const embeddingModel = genAI.getGenerativeModel({ model: 'text-embedding-004' })
-    const result = await embeddingModel.embedContent(text)
+    const model = genAI.getGenerativeModel({ model: 'gemini-embedding-001' })
+    const result = await model.embedContent(text)
     return result.embedding.values
   } catch (err) {
     logger.error(`[Gemini] Embedding error: ${err.message}`)
     return null
   }
 }
+

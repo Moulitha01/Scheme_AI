@@ -1,10 +1,13 @@
+// backend/src/services/ocr.js
 import Tesseract from 'tesseract.js'
 import { logger } from '../utils/logger.js'
+import fs from 'fs'
+import path from 'path'
 
 // Indian ID document field patterns
 const PATTERNS = {
   name: [
-    /(?:name|नाम|பெயர்|పేరు)[:\s]*([A-Z][A-Za-z\s]+)/i,
+    /(?:name|नाम|பெயர்|లేదు)[:\s]*([A-Z][A-Za-z\s]{3,30})/m,
     /^([A-Z][A-Z\s]{3,30})$/m,
   ],
   dob: [
@@ -12,7 +15,7 @@ const PATTERNS = {
     /(\d{2}[\/\-]\d{2}[\/\-]\d{4})/,
   ],
   gender: [
-    /\b(male|female|पुरुष|महिला|ஆண்|பெண்|స్త్రీ|పురుషుడు)\b/i,
+    /\b(male|female|पुरुष|महिला|ஆண்|பெண்|లో|స్త్రీ)\b/i,
   ],
   aadhaar: [
     /(\d{4}\s\d{4}\s\d{4})/,
@@ -21,94 +24,171 @@ const PATTERNS = {
   pincode: [
     /\b(\d{6})\b/,
   ],
+  mobile: [
+    /(?:mobile|phone|mob)[:\s]*([6-9]\d{9})/i,
+    /\b([6-9]\d{9})\b/,
+  ],
+  state: [
+    /(?:Tamil Nadu|Maharashtra|Karnataka|Kerala|Andhra Pradesh|Telangana|Gujarat|Rajasthan|Uttar Pradesh|Bihar|West Bengal|Madhya Pradesh|Punjab|Haryana|Odisha|Assam|Jharkhand|Uttarakhand|Himachal Pradesh|Goa|Manipur|Meghalaya|Mizoram|Nagaland|Sikkim|Tripura|Arunachal Pradesh|Delhi|Chandigarh)/i,
+  ],
   address: [
-    /(?:address|पता|முகவரி|చిరునామా)[:\s]*(.{20,100})/i,
-  ],
-  voter_id: [
-    /([A-Z]{3}\d{7})/,
+    /(?:address|पता|முகவரி|చిరునామా)[:\s]*(.{10,100})/i,
   ],
 }
 
-const cleanText = (text) => text.replace(/\s+/g, ' ').trim()
-
-const extractField = (text, patterns) => {
-  for (const pattern of patterns) {
-    const match = text.match(pattern)
-    if (match) return cleanText(match[1] || match[0])
-  }
-  return null
+// Normalize gender to standard values
+function normalizeGender(raw) {
+  if (!raw) return ''
+  const lower = raw.toLowerCase()
+  if (['male', 'पुरुष', 'ஆண்', 'మగ'].some(v => lower.includes(v))) return 'Male'
+  if (['female', 'महिला', 'பெண்', 'స్త్రీ'].some(v => lower.includes(v))) return 'Female'
+  return raw
 }
 
-export const extractFromDocument = async (imagePath, docType = 'aadhaar') => {
-  logger.info(`OCR processing: ${imagePath}`)
+// Extract DOB and calculate age
+function extractAge(dob) {
+  if (!dob) return ''
+  const parts = dob.split(/[\/\-]/)
+  if (parts.length !== 3) return ''
+  const [day, month, year] = parts.map(Number)
+  const birthDate = new Date(year, month - 1, day)
+  const today = new Date()
+  const age = today.getFullYear() - birthDate.getFullYear()
+  return isNaN(age) ? '' : String(age)
+}
 
+// Run Tesseract OCR on the file
+async function runOCR(filePath) {
+  logger.info(`Running Tesseract OCR on: ${filePath}`)
   try {
-    // Multi-language OCR: English + Hindi + Tamil + Telugu
-    const { data } = await Tesseract.recognize(imagePath, 'eng+hin+tam+tel', {
-      logger: m => {
-        if (m.status === 'recognizing text') {
-          logger.debug(`OCR progress: ${Math.round(m.progress * 100)}%`)
-        }
-      },
+    const result = await Tesseract.recognize(filePath, 'eng+hin+tam+tel+kan+ben+guj+mar', {
+      logger: () => {},
     })
+    return result.data.text
+  } catch (err) {
+    logger.error(`Tesseract error: ${err.message}`)
+    return ''
+  }
+}
 
-    const rawText = data.text
-    logger.debug(`OCR raw text: ${rawText.substring(0, 200)}...`)
+// Extract fields using regex patterns from raw OCR text
+function extractWithPatterns(text) {
+  const fields = {}
 
-    // Extract structured fields
-    const fields = {
-      name: extractField(rawText, PATTERNS.name),
-      dob: extractField(rawText, PATTERNS.dob),
-      gender: extractField(rawText, PATTERNS.gender),
-      aadhaar: extractField(rawText, PATTERNS.aadhaar),
-      address: extractField(rawText, PATTERNS.address),
-      pincode: extractField(rawText, PATTERNS.pincode),
+  for (const [field, patterns] of Object.entries(PATTERNS)) {
+    for (const pattern of patterns) {
+      const match = text.match(pattern)
+      if (match && match[1]) {
+        fields[field] = match[1].trim()
+        break
+      }
+    }
+  }
+
+  // Normalize
+  if (fields.gender) fields.gender = normalizeGender(fields.gender)
+  if (fields.dob) fields.age = extractAge(fields.dob)
+
+  // Extract district/state from address if not found separately
+  if (!fields.state && fields.address) {
+    const stateMatch = fields.address.match(PATTERNS.state[0])
+    if (stateMatch) fields.state = stateMatch[0]
+  }
+
+  return fields
+}
+
+// Use Gemini to intelligently extract fields from OCR text
+async function extractWithGemini(ocrText, docType) {
+  try {
+    const { GoogleGenerativeAI } = await import('@google/generative-ai')
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+
+    const prompt = `
+You are an expert at extracting information from Indian government documents like Aadhaar card, PAN card, ration card, voter ID, income certificate.
+
+Extract ALL available fields from this OCR text of a ${docType} document.
+Return ONLY a valid JSON object with these fields (use empty string "" if not found):
+{
+  "name": "",
+  "dob": "DD/MM/YYYY format",
+  "age": "calculated from dob",
+  "gender": "Male or Female",
+  "aadhaar": "XXXX XXXX XXXX format",
+  "mobile": "10 digit number",
+  "address": "full address",
+  "state": "",
+  "district": "",
+  "pincode": "",
+  "caste": "General/OBC/SC/ST",
+  "income": "annual income in rupees if present",
+  "occupation": ""
+}
+
+OCR Text:
+${ocrText}
+
+Return ONLY the JSON object, no explanation.
+    `.trim()
+
+    const result = await model.generateContent(prompt)
+    const responseText = result.response.text().trim()
+
+    // Strip markdown code fences if present
+    const cleaned = responseText.replace(/```json|```/g, '').trim()
+    return JSON.parse(cleaned)
+
+  } catch (err) {
+    logger.warn(`Gemini extraction failed: ${err.message}, using pattern fallback`)
+    return null
+  }
+}
+
+// Calculate confidence score based on how many fields were found
+function calculateConfidence(fields) {
+  const keyFields = ['name', 'dob', 'gender', 'aadhaar', 'state']
+  const found = keyFields.filter(f => fields[f] && fields[f] !== '').length
+  return Math.round((found / keyFields.length) * 100)
+}
+
+// Main export — called by route
+export async function extractFromDocument(filePath, docType = 'aadhaar') {
+  try {
+    // Step 1: Run OCR
+    const ocrText = await runOCR(filePath)
+
+    if (!ocrText || ocrText.trim().length < 10) {
+      return { success: false, fields: {}, confidence: 0, error: 'Could not read text from document' }
     }
 
-    // Detect state from pincode
-    if (fields.pincode) {
-      fields.state = detectStateFromPincode(fields.pincode)
+    logger.info(`OCR extracted ${ocrText.length} characters`)
+
+    // Step 2: Try Gemini first (smarter)
+    let fields = await extractWithGemini(ocrText, docType)
+
+    // Step 3: Fall back to regex patterns if Gemini fails
+    if (!fields || Object.values(fields).every(v => v === '')) {
+      logger.info('Using pattern-based extraction')
+      fields = extractWithPatterns(ocrText)
     }
 
-    // Clean null fields
-    const cleaned = Object.fromEntries(
-      Object.entries(fields).filter(([_, v]) => v !== null)
-    )
+    // Step 4: Fill in age from dob if missing
+    if (!fields.age && fields.dob) {
+      fields.age = extractAge(fields.dob)
+    }
+
+    const confidence = calculateConfidence(fields)
 
     return {
       success: true,
-      fields: cleaned,
-      confidence: data.confidence,
-      rawText: rawText.substring(0, 500),
+      fields,
+      confidence,
+      rawText: ocrText.slice(0, 500), // for debugging
     }
-  } catch (err) {
-    logger.error(`OCR error: ${err.message}`)
-    throw new Error(`OCR processing failed: ${err.message}`)
-  }
-}
 
-// Detect state from first 2-3 digits of pincode
-const detectStateFromPincode = (pincode) => {
-  const pin = parseInt(pincode.replace(/\s/g, ''))
-  const prefix = Math.floor(pin / 10000)
-  const map = {
-    11: 'Delhi', 12: 'Haryana', 13: 'Haryana', 14: 'Punjab', 15: 'Punjab',
-    16: 'Punjab', 17: 'Himachal Pradesh', 18: 'Jammu & Kashmir', 19: 'Jammu & Kashmir',
-    20: 'Uttar Pradesh', 21: 'Uttar Pradesh', 22: 'Uttar Pradesh', 23: 'Uttar Pradesh',
-    24: 'Uttar Pradesh', 25: 'Uttar Pradesh', 26: 'Uttar Pradesh', 27: 'Uttar Pradesh',
-    28: 'Uttar Pradesh', 30: 'Rajasthan', 31: 'Rajasthan', 32: 'Rajasthan',
-    33: 'Rajasthan', 34: 'Rajasthan', 36: 'Gujarat', 37: 'Gujarat', 38: 'Gujarat',
-    39: 'Gujarat', 40: 'Maharashtra', 41: 'Maharashtra', 42: 'Maharashtra',
-    43: 'Maharashtra', 44: 'Maharashtra', 45: 'Madhya Pradesh', 46: 'Madhya Pradesh',
-    47: 'Madhya Pradesh', 48: 'Madhya Pradesh', 49: 'Chhattisgarh',
-    50: 'Andhra Pradesh', 51: 'Andhra Pradesh', 52: 'Andhra Pradesh',
-    53: 'Andhra Pradesh', 56: 'Karnataka', 57: 'Karnataka', 58: 'Karnataka',
-    59: 'Karnataka', 60: 'Tamil Nadu', 61: 'Tamil Nadu', 62: 'Tamil Nadu',
-    63: 'Tamil Nadu', 64: 'Tamil Nadu', 67: 'Kerala', 68: 'Kerala', 69: 'Kerala',
-    70: 'West Bengal', 71: 'West Bengal', 72: 'West Bengal', 73: 'West Bengal',
-    74: 'West Bengal', 75: 'Odisha', 76: 'Odisha', 77: 'Odisha',
-    78: 'Assam', 79: 'Assam', 80: 'Bihar', 81: 'Bihar', 82: 'Bihar',
-    83: 'Jharkhand', 84: 'Bihar',
+  } catch (err) {
+    logger.error(`extractFromDocument error: ${err.message}`)
+    return { success: false, fields: {}, confidence: 0, error: err.message }
   }
-  return map[prefix] || 'India'
 }

@@ -1,10 +1,10 @@
 import dotenv from 'dotenv'
-dotenv.config({ path: '../.env' })
+dotenv.config({ path: './.env' })
 import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
 import dns from 'dns'
-dns.setServers(["1.1.1.1","8.8.8.8"])
+dns.setServers(['1.1.1.1', '8.8.8.8'])
 import rateLimit from 'express-rate-limit'
 import { connectDB } from './utils/db.js'
 import { logger } from './utils/logger.js'
@@ -12,13 +12,16 @@ import chatRoutes from './routes/chat.js'
 import schemeRoutes from './routes/schemes.js'
 import ocrRoutes from './routes/ocr.js'
 import userRoutes from './routes/users.js'
+import a2aRoutes from './routes/a2a.js'
+import { crawlGovernmentSchemes } from './services/govCrawler.js'
+import { ingestDocumentsFolder, ensureDocumentsFolder } from './services/documentIngestor.js'
 
 dotenv.config()
 
 const app = express()
 const PORT = process.env.PORT || 5000
 
-// ── Middleware ──
+// ── Middleware ────────────────────────────────────────────────
 app.use(helmet())
 app.use(cors({
   origin: process.env.CLIENT_URL || 'http://localhost:5173',
@@ -29,14 +32,15 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 100,
   message: { error: 'Too many requests. Please try again later.' },
 })
 app.use('/api/', limiter)
 
-// ── Routes ──
+// ── Routes ────────────────────────────────────────────────────
 app.use('/api/chat', chatRoutes)
+app.use('/api/a2a', a2aRoutes)
 app.use('/api/schemes', schemeRoutes)
 app.use('/api/ocr', ocrRoutes)
 app.use('/api/users', userRoutes)
@@ -44,6 +48,17 @@ app.use('/api/users', userRoutes)
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', service: 'Scheme-AI Backend', version: '1.0.0' })
+})
+
+// Force re-crawl government websites
+app.post('/api/admin/refresh-schemes', async (req, res) => {
+  try {
+    logger.info('🔄 Manual scheme refresh triggered')
+    await crawlGovernmentSchemes({ forceRefresh: true })
+    res.json({ success: true, message: 'Schemes refreshed from government websites' })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
 })
 
 // 404
@@ -59,11 +74,24 @@ app.use((err, req, res, next) => {
   })
 })
 
-// ── Start ──
+// ── Start ─────────────────────────────────────────────────────
 const start = async () => {
   await connectDB()
+
+  // Ensure documents folder exists
+  ensureDocumentsFolder()
+
+  // Crawl government websites for latest schemes (cached 24h)
+  crawlGovernmentSchemes().catch(e => logger.warn(`Crawl skipped: ${e.message}`))
+
+  // Ingest any PDFs dropped in backend/documents/
+  ingestDocumentsFolder().catch(e => logger.warn(`Doc ingest skipped: ${e.message}`))
+
   app.listen(PORT, () => {
     logger.info(`🚀 Scheme-AI Backend running on http://localhost:${PORT}`)
+    logger.info(`🌐 Crawling government websites for scheme data...`)
+    logger.info(`📁 Drop PDFs in backend/documents/ to add local schemes`)
+    logger.info(`🔄 POST /api/admin/refresh-schemes to force re-crawl`)
   })
 }
 
