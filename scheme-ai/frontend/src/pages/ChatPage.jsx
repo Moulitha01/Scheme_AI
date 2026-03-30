@@ -1,25 +1,14 @@
 import { useState, useRef, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import {
   RiMicLine,
   RiMicOffLine,
   RiSendPlaneFill,
-  RiTranslate2,
   RiDeleteBin6Line
 } from 'react-icons/ri'
 import axios from 'axios'
 import toast from 'react-hot-toast'
 import ReactMarkdown from 'react-markdown'
-import { useAuthStore, useChatStore, useSchemeStore } from '../store'
-
-const QUICK_PROMPTS = [
-  '👩‍🌾 I am a farmer needing crop support',
-  '🎓 Help me find education scholarships',
-  '🏠 I need housing scheme assistance',
-  '👩‍⚕️ Looking for health insurance schemes',
-  '👴 Pension schemes for elderly parents',
-  '💼 Schemes for unemployed youth',
-]
+import { useAuthStore, useChatStore } from '../store'
 
 const LANG_CODES = {
   English: 'en-IN',
@@ -36,12 +25,8 @@ const LANGUAGES = Object.keys(LANG_CODES)
 const INITIAL_MSG = {
   id: 'init',
   role: 'ai',
-  content: `नमस्ते! 🙏 I'm **Scheme-AI**, your personal welfare navigator.
-
-Tell me about yourself and your needs — I'll find every government scheme you're eligible for.
-
-You can speak or type in **any Indian language**.`,
-  timestamp: new Date().toISOString(),
+  content: `Welcome to Scheme-AI 🚀  
+Tell me your situation to find best government schemes.`,
 }
 
 export default function ChatPage() {
@@ -50,48 +35,31 @@ export default function ChatPage() {
   const [recording, setRecording] = useState(false)
 
   const recognitionRef = useRef(null)
-  const bottomRef = useRef(null)
 
-  // Stores
-  const { user, sessionId, updateLanguage } = useAuthStore()
-  const { messages, addMessage, setMessages, setUserProfile, clearChat } =
-    useChatStore()
-  const { applyScheme } = useSchemeStore()
+  const { user, updateLanguage, sessionId } = useAuthStore()
+  const { messages, addMessage, setMessages, clearChat } = useChatStore()
 
-  // ✅ SINGLE SOURCE OF TRUTH
+  // ✅ SINGLE SOURCE
   const selectedLang = user?.language || 'English'
 
-  // Init chat
   useEffect(() => {
     if (messages.length === 0) {
       setMessages([INITIAL_MSG])
     }
   }, [])
 
-  // Auto scroll
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, loading])
+  // ✅ DEBUG (REMOVE LATER)
+  console.log("ACTIVE LANG:", selectedLang)
 
-  // ✅ LANGUAGE CHANGE FIXED
   const handleLangChange = (lang) => {
     updateLanguage(lang)
-    localStorage.setItem('lang', LANG_CODES[lang])
-    toast.success(`Language set to ${lang}`)
+    toast.success(`Switched to ${lang}`)
   }
 
-  // Send message
   const sendMessage = async (text) => {
     if (!text.trim() || loading) return
 
-    const userMsg = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: text,
-      timestamp: new Date().toISOString(),
-    }
-
-    addMessage(userMsg)
+    addMessage({ id: Date.now(), role: 'user', content: text })
     setInput('')
     setLoading(true)
 
@@ -103,14 +71,10 @@ export default function ChatPage() {
       })
 
       addMessage({
-        id: Date.now().toString(),
+        id: Date.now() + 1,
         role: 'ai',
         content: data.reply,
-        schemes: data.schemes || [],
-        timestamp: new Date().toISOString(),
       })
-
-      if (data.userProfile) setUserProfile(data.userProfile)
     } catch {
       toast.error('Server error')
     } finally {
@@ -118,12 +82,11 @@ export default function ChatPage() {
     }
   }
 
-  // ✅ VOICE FIXED
   const handleVoice = () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
 
     if (!SR) {
-      toast.error('Use Chrome for voice')
+      toast.error('Use Chrome')
       return
     }
 
@@ -134,22 +97,16 @@ export default function ChatPage() {
     }
 
     const recognition = new SR()
-    recognition.lang = LANG_CODES[selectedLang] || 'en-IN'
+    recognition.lang = LANG_CODES[selectedLang]
 
     recognition.onstart = () => {
       setRecording(true)
-      toast.success(`Listening in ${selectedLang}`)
     }
 
     recognition.onresult = (e) => {
       const text = e.results[0][0].transcript
       setInput(text)
-      sendMessage(text) // auto send
-    }
-
-    recognition.onerror = () => {
-      toast.error('Voice failed')
-      setRecording(false)
+      sendMessage(text)
     }
 
     recognition.onend = () => setRecording(false)
@@ -158,66 +115,54 @@ export default function ChatPage() {
     recognition.start()
   }
 
-  const handleClearChat = () => {
-    clearChat()
-    setMessages([INITIAL_MSG])
-  }
-
   return (
-    <div className="pt-[67px] h-screen flex flex-col">
-      {/* HEADER */}
-      <div className="bg-navy-mid border-b px-4 py-3 flex justify-between">
-        <h1 className="font-bold">Scheme-AI</h1>
+    <div className="h-screen flex flex-col">
 
-        <div className="flex gap-1 flex-wrap">
+      {/* HEADER */}
+      <div className="flex justify-between p-3 border-b">
+        <h1>Scheme-AI</h1>
+
+        <div className="flex gap-2 flex-wrap">
           {LANGUAGES.map((lang) => (
             <button
               key={lang}
               onClick={() => handleLangChange(lang)}
-              className={`px-2 py-1 rounded-lg text-xs transition ${
+              className={`px-2 py-1 text-xs rounded ${
                 selectedLang === lang
-                  ? 'bg-orange-500 text-white scale-105'
-                  : 'border text-gray-400 hover:text-orange-400'
+                  ? 'bg-orange-500 text-white'
+                  : 'border'
               }`}
             >
               {lang}
             </button>
           ))}
 
-          <button onClick={handleClearChat}>
+          <button onClick={clearChat}>
             <RiDeleteBin6Line />
           </button>
         </div>
       </div>
 
       {/* CHAT */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.map((msg) => (
           <div
             key={msg.id}
-            className={`flex ${
-              msg.role === 'user' ? 'justify-end' : 'justify-start'
+            className={`${
+              msg.role === 'user' ? 'text-right' : 'text-left'
             }`}
           >
-            <div
-              className={`px-4 py-2 rounded-xl max-w-[70%] ${
-                msg.role === 'user'
-                  ? 'bg-orange-500 text-white'
-                  : 'bg-gray-800 text-gray-200'
-              }`}
-            >
+            <div className="inline-block p-2 bg-gray-800 text-white rounded">
               <ReactMarkdown>{msg.content}</ReactMarkdown>
             </div>
           </div>
         ))}
 
-        {loading && <p className="text-gray-400">Typing...</p>}
-
-        <div ref={bottomRef} />
+        {loading && <p>Typing...</p>}
       </div>
 
       {/* INPUT */}
-      <div className="p-4 flex gap-2">
+      <div className="flex gap-2 p-3 border-t">
         <button onClick={handleVoice}>
           {recording ? <RiMicOffLine /> : <RiMicLine />}
         </button>
@@ -225,8 +170,7 @@ export default function ChatPage() {
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          className="flex-1 p-2 bg-gray-900 text-white rounded"
-          placeholder={`Type in ${selectedLang}`}
+          className="flex-1 border p-2"
         />
 
         <button onClick={() => sendMessage(input)}>
