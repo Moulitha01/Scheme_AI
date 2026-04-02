@@ -54,7 +54,7 @@ export default function LandingPage() {
               onClick={() => navigate('/elderly')}
               className="px-8 py-3 border-2 border-orange-400 text-orange-400 rounded-full font-semibold text-lg hover:bg-orange-500/10 transition-all"
             >
-              🎙️ Voice Mode
+              🎙️ {t(lang, 'voiceMode')}
             </button>
           </div>
         </motion.div>
