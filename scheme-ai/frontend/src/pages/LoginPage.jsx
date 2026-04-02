@@ -6,16 +6,15 @@ import toast from 'react-hot-toast'
 import { useAuthStore } from '../store'
 
 const LANGUAGES = [
-  { code: 'English', label: 'English' },
-  { code: 'हिन्दी', label: 'हिन्दी (Hindi)' },
-  { code: 'தமிழ்', label: 'தமிழ் (Tamil)' },
-  { code: 'తెలుగు', label: 'తెలుగు (Telugu)' },
-  { code: 'বাংলা', label: 'বাংলা (Bengali)' },
-  { code: 'मराठी', label: 'मराठी (Marathi)' },
-  { code: 'ಕನ್ನಡ', label: 'ಕನ್ನಡ (Kannada)' },
-  { code: 'ગુજરાતી', label: 'ગુજરાતી (Gujarati)' },
+  { code: 'en-IN', short: 'en', label: 'English', name: 'English', flag: '🇬🇧' },
+  { code: 'hi-IN', short: 'hi', label: 'हिन्दी', name: 'Hindi', flag: '🇮🇳' },
+  { code: 'ta-IN', short: 'ta', label: 'தமிழ்', name: 'Tamil', flag: '🇮🇳' },
+  { code: 'te-IN', short: 'te', label: 'తెలుగు', name: 'Telugu', flag: '🇮🇳' },
+  { code: 'bn-IN', short: 'bn', label: 'বাংলা', name: 'Bengali', flag: '🇮🇳' },
+  { code: 'mr-IN', short: 'mr', label: 'मराठी', name: 'Marathi', flag: '🇮🇳' },
+  { code: 'gu-IN', short: 'gu', label: 'ગુજરાતી', name: 'Gujarati', flag: '🇮🇳' },
+  { code: 'kn-IN', short: 'kn', label: 'ಕನ್ನಡ', name: 'Kannada', flag: '🇮🇳' },
 ]
-
 const STATES = [
   'Andhra Pradesh','Assam','Bihar','Chhattisgarh','Delhi','Gujarat',
   'Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala',
