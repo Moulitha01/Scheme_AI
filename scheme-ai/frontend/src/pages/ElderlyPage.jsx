@@ -214,14 +214,32 @@ function getSavedLang() {
 }
 
 /* ─── Speech helper ──────────────────────────────────────── */
-function speak(text, langCode, rate = 0.85) {
+function speak(text, langCode, rate = 0.9) {
   if (!('speechSynthesis' in window)) return
-  window.speechSynthesis.cancel()
-  const u = new SpeechSynthesisUtterance(text)
-  u.lang = langCode
-  u.rate = rate
-  u.pitch = 1.05
-  window.speechSynthesis.speak(u)
+
+  const synth = window.speechSynthesis
+  synth.cancel()
+
+  const utter = new SpeechSynthesisUtterance(text)
+  utter.lang = langCode
+  utter.rate = rate
+  utter.pitch = 1
+
+  // 🔥 Get available voices
+  const voices = synth.getVoices()
+
+  // 🎯 Try to pick best matching Indian voice
+  let selectedVoice =
+    voices.find(v => v.lang === langCode) ||                 // exact match
+    voices.find(v => v.lang.startsWith(langCode.split('-')[0])) || // hi, ta, etc.
+    voices.find(v => v.name.toLowerCase().includes('india')) ||    // fallback
+    voices[0]
+
+  if (selectedVoice) {
+    utter.voice = selectedVoice
+  }
+
+  synth.speak(utter)
 }
 
 /* ─── Category styles ────────────────────────────────────── */
