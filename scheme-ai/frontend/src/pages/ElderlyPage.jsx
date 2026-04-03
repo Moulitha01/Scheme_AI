@@ -416,17 +416,32 @@ function ApplyFlow({ scheme, userProfile, L, onBack }) {
   const scanDoc = async () => {
     if (!uploadedFile) return
     setStage('scanning')
+    setError('')
     try {
       const fd = new FormData()
-      fd.append('document', uploadedFile); fd.append('docType', 'aadhaar')
+      fd.append('document', uploadedFile);
+      fd.append('docType', 'aadhaar')
       const res = await fetch(`${API_BASE}/api/ocr/extract`, { method: 'POST', body: fd })
+      if (!res.ok) throw new Error('Server error')
       const data = await res.json()
-      if (!data.success) throw new Error(data.error || 'OCR failed')
+      if (!data.success) {
+        throw new Error(data.error || 'OCR failed')
+      }
       const merged = { ...formData }
       const filled = [...filledFields]
-      for (const [k, v] of Object.entries(data.fields || {})) {
-        if (v) { merged[k] = v; if (!filled.includes(k)) filled.push(k) }
+          Object.keys(data.fields || {}).forEach((key) => {
+      const value = data.fields[key]
+
+      if (value && value !== '') {
+        if (!merged[key] || String(merged[key]).length < String(value).length) {
+          merged[key] = value
+        }
+
+        if (!filled.includes(key)) {
+          filled.push(key)
+        }
       }
+    })
       setFormData(merged); setFilledFields(filled); setConfidence(data.confidence || 0)
       setStage('form')
       speak('Details extracted. Please check the form.', L.code)
@@ -932,7 +947,13 @@ export default function ElderlyPage() {
 
         {/* Scheme cards */}
         {schemes.map((scheme, i) => (
-          <SchemeCard key={i} scheme={scheme} index={i} onApply={setApplyScheme} L={L} />
+          <SchemeCard
+            key={i}
+            scheme={scheme}
+            index={i}
+            onApply={(scheme) => setApplyScheme(scheme)}
+            L={L}
+/>
         ))}
 
         {/* Error */}
