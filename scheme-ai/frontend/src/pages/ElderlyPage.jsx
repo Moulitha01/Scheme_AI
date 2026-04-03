@@ -579,7 +579,7 @@ function ApplyFlow({ scheme, userProfile, L, onBack }) {
                       <span className="text-4xl">📷</span>
                       <div className="text-center">
                         <p className="font-bold text-white text-sm">Take Photo</p>
-                        <p className="text-[#8A9BB0] text-xs">{L.label}</p>
+                        <p className="text-[#8A9BB0] text-xs">{L.label}</p><p className="text-[#8A9BB0] text-xs">Camera</p>
                       </div>
                     </button>
                     <button onClick={() => fileInputRef.current?.click()}
