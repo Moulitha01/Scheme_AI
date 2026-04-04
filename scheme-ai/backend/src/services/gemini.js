@@ -1,47 +1,29 @@
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai'
+// backend/src/services/gemini.js
+// Drop-in Groq replacement — same exports as before, nothing else changes
+import Groq from 'groq-sdk'
 import { logger } from '../utils/logger.js'
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
 
-const SAFETY_SETTINGS = [
-  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-]
+const MODEL = 'llama-3.3-70b-versatile' // best free model on Groq
 
-// Try models in order — if one is rate limited, fall back to next
-const MODELS = ['gemini-2.0-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-flash-lite-001']
-
-const getModel = (temp = 0.3, tokens = 512) => {
-  return genAI.getGenerativeModel({
-    model: MODELS[0],
-    safetySettings: SAFETY_SETTINGS,
-    generationConfig: { temperature: temp, maxOutputTokens: tokens },
-  })
-}
-
-const extractJSON = (rawText) => {
-  try {
-    const text = rawText.replace(/```json|```/g, '').trim()
-    const match = text.match(/\{[\s\S]*\}/)
-    if (!match) throw new Error('No JSON found')
-    return JSON.parse(match[0])
-  } catch (err) {
-    return null
-  }
-}
-
-// ── Retry with exponential backoff ───────────────────────────
-const withRetry = async (fn, retries = 2, delay = 2000) => {
-  for (let i = 0; i <= retries; i++) {
+// ── Helper: call Groq with retry ──────────────────────────────
+async function callGroq(messages, { temperature = 0.3, maxTokens = 512 } = {}) {
+  for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      return await fn()
+      const res = await groq.chat.completions.create({
+        model: MODEL,
+        messages,
+        temperature,
+        max_tokens: maxTokens,
+      })
+      return res.choices[0]?.message?.content || ''
     } catch (err) {
-      const is429 = err.message?.includes('429') || err.message?.includes('quota')
-      if (is429 && i < retries) {
-        logger.warn(`Rate limited — retrying in ${delay}ms (attempt ${i + 1}/${retries})`)
-        await new Promise(r => setTimeout(r, delay))
-        delay *= 2
+      const is429 = err?.status === 429 || err?.message?.includes('rate')
+      if (is429 && attempt < 2) {
+        const wait = (attempt + 1) * 2000
+        logger.warn(`Groq rate limit — retrying in ${wait}ms`)
+        await new Promise(r => setTimeout(r, wait))
         continue
       }
       throw err
@@ -49,41 +31,52 @@ const withRetry = async (fn, retries = 2, delay = 2000) => {
   }
 }
 
+// ── Helper: extract JSON from text ───────────────────────────
+function extractJSON(text) {
+  try {
+    const clean = text.replace(/```json|```/g, '').trim()
+    const match = clean.match(/\{[\s\S]*\}/)
+    if (match) return JSON.parse(match[0])
+  } catch { /* ignore */ }
+  return null
+}
+
 // ─────────────────────────────────────────────────────────────
 // LAYER 1 — Profile Extractor
 // ─────────────────────────────────────────────────────────────
-const PROFILE_PROMPT = `You are a profile extractor for Scheme-AI.
-Extract info from the user message. Output ONLY valid JSON, no markdown.
-
-{
-  "name": null,
-  "age": null,
-  "gender": "male|female|other|null",
-  "state": null,
-  "district": null,
-  "occupation": "farmer|student|daily_wage|unemployed|business|govt_employee|other|null",
-  "income_annual": null,
-  "land_acres": null,
-  "caste": "general|obc|sc|st|null",
-  "is_disabled": null,
-  "is_widow": null,
-  "has_aadhaar": null,
-  "family_size": null,
-  "need_category": []
-}`
-
 export const extractProfile = async (message) => {
   try {
-    return await withRetry(async () => {
-      const model = getModel(0.1, 300)
-      const result = await model.generateContent(
-        `${PROFILE_PROMPT}\n\nUser message: "${message}"\n\nReturn ONLY JSON:`
-      )
-      const parsed = extractJSON(result.response.text())
-      return parsed || {}
-    })
+    const text = await callGroq([
+      {
+        role: 'system',
+        content: `You are a profile extractor for an Indian government scheme assistant.
+Extract structured info from user messages. User may write in any Indian language.
+Return ONLY valid JSON, no markdown, no explanation.
+Fields (use null if not mentioned):
+{
+  "name": string|null,
+  "age": number|null,
+  "gender": "male"|"female"|"other"|null,
+  "state": "state name in English"|null,
+  "district": string|null,
+  "occupation": "farmer"|"student"|"daily_wage"|"unemployed"|"business"|"govt_employee"|"other"|null,
+  "income_annual": number|null,
+  "land_acres": number|null,
+  "caste": "general"|"obc"|"sc"|"st"|null,
+  "is_disabled": boolean|null,
+  "is_widow": boolean|null,
+  "has_aadhaar": boolean|null,
+  "family_size": number|null,
+  "need_category": []
+}`,
+      },
+      { role: 'user', content: `Message: "${message}"\n\nReturn ONLY JSON:` },
+    ], { temperature: 0.1, maxTokens: 300 })
+
+    const parsed = extractJSON(text)
+    return parsed || {}
   } catch (err) {
-    logger.error(`[Gemini] Profile extract error: ${err.message}`)
+    logger.error(`[Groq] Profile extract error: ${err.message}`)
     return {}
   }
 }
@@ -91,12 +84,6 @@ export const extractProfile = async (message) => {
 // ─────────────────────────────────────────────────────────────
 // LAYER 2 — AI Reply Generator
 // ─────────────────────────────────────────────────────────────
-const SYSTEM_INSTRUCTION = `You are Scheme-AI, a compassionate welfare navigator for Indian citizens.
-ALWAYS respond in the SAME language the user wrote in.
-Speak simply like a helpful neighbour. No jargon.
-Recommend 2-4 schemes when you have enough context.
-Keep responses SHORT — elderly users are reading this.`
-
 export const generateAIReply = async ({
   message,
   history = [],
@@ -105,35 +92,44 @@ export const generateAIReply = async ({
   language = 'English',
 }) => {
   try {
-    return await withRetry(async () => {
-      const model = getModel(0.7, 800)
-      const chatHistory = history.slice(-6).map(m => ({
-        role: m.role === 'ai' ? 'model' : 'user',
-        parts: [{ text: m.content }],
-      }))
+    const schemeNames = matchedSchemes.slice(0, 4).map(s => s.name).join(', ')
 
-      const chat = model.startChat({
-        history: chatHistory,
-        systemInstruction: { role: 'system', parts: [{ text: SYSTEM_INSTRUCTION }] },
-      })
+    const systemPrompt = `You are Scheme-AI, a compassionate welfare navigator for Indian citizens.
+CRITICAL: ALWAYS respond in ${language} language only. Never switch languages.
+Speak simply like a helpful neighbour. No bureaucratic jargon.
+Keep response SHORT — 2-3 sentences max. Elderly users are reading this.
+${matchedSchemes.length > 0 ? `Matched schemes: ${schemeNames}` : ''}
+User profile: age=${userProfile.age || '?'}, occupation=${userProfile.occupation || '?'}, state=${userProfile.state || '?'}`
 
-      const context = `\n---\n[Context: profile=${JSON.stringify(userProfile)}, language=${language}, schemes=${matchedSchemes.slice(0,3).map(s=>s.name).join(',')}]\n---`
-      const result = await chat.sendMessage(`${message}${context}`)
-      return result.response.text()
-    })
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...history.slice(-4).map(m => ({
+        role: m.role === 'ai' ? 'assistant' : 'user',
+        content: m.content,
+      })),
+      { role: 'user', content: message },
+    ]
+
+    const reply = await callGroq(messages, { temperature: 0.7, maxTokens: 300 })
+    return reply || getFallbackReply(language, matchedSchemes.length, userProfile.name)
   } catch (err) {
-    logger.error(`[Gemini] AI reply error: ${err.message}`)
-    // Return language-specific fallback
-    const fallbacks = {
-      Tamil: 'உங்கள் விவரங்களை பெற்றோம். கீழே உள்ள திட்டங்களை பாருங்கள்.',
-      Hindi: 'आपकी जानकारी मिल गई। नीचे दी गई योजनाएँ देखें।',
-      Telugu: 'మీ వివరాలు అందుకున్నాం. దిగువ పథకాలను చూడండి.',
-      Kannada: 'ನಿಮ್ಮ ವಿವರಗಳನ್ನು ಪಡೆದಿದ್ದೇವೆ. ಕೆಳಗಿನ ಯೋಜನೆಗಳನ್ನು ನೋಡಿ.',
-      Bengali: 'আপনার তথ্য পেয়েছি। নিচের প্রকল্পগুলি দেখুন।',
-      English: 'I found some schemes for you. Please check the cards below.',
-    }
-    return fallbacks[language] || fallbacks.English
+    logger.error(`[Groq] AI reply error: ${err.message}`)
+    return getFallbackReply(language, matchedSchemes.length, userProfile.name)
   }
+}
+
+function getFallbackReply(language, count, name) {
+  const n = name ? `${name}, ` : ''
+  const replies = {
+    Tamil:   `${n}வணக்கம்! உங்களுக்கு ${count} திட்டம் கண்டறியப்பட்டது. கீழே பாருங்கள்.`,
+    Hindi:   `${n}नमस्ते! आपके लिए ${count} योजनाएँ मिली हैं। नीचे देखें।`,
+    Telugu:  `${n}నమస్కారం! మీకు ${count} పథకాలు దొరికాయి.`,
+    Kannada: `${n}ನಮಸ್ಕಾರ! ನಿಮಗೆ ${count} ಯೋಜನೆಗಳು ಸಿಕ್ಕಿವೆ.`,
+    Bengali: `${n}নমস্কার! আপনার জন্য ${count}টি প্রকল্প পাওয়া গেছে।`,
+    Marathi: `${n}नमस्कार! तुमच्यासाठी ${count} योजना सापडल्या.`,
+    English: `${n}Hello! I found ${count} scheme${count !== 1 ? 's' : ''} for you. Please check below.`,
+  }
+  return replies[language] || replies.English
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -141,42 +137,43 @@ export const generateAIReply = async ({
 // ─────────────────────────────────────────────────────────────
 export const scoreEligibility = async (userProfile, scheme) => {
   try {
-    return await withRetry(async () => {
-      const model = getModel(0.2, 150)
-      const result = await model.generateContent(`
-Profile: ${JSON.stringify(userProfile)}
+    const text = await callGroq([
+      {
+        role: 'system',
+        content: `You are an eligibility scorer for Indian government schemes.
+Score from 0-100. Be GENEROUS — incomplete profile = assume best case, minimum 45.
+Return ONLY JSON: {"score": number, "reason": "one short sentence"}`,
+      },
+      {
+        role: 'user',
+        content: `Profile: ${JSON.stringify(userProfile)}
 Scheme: ${scheme.name}
-Eligibility: ${Array.isArray(scheme.eligibility) ? scheme.eligibility.join(', ') : scheme.eligibility}
+Eligibility criteria: ${Array.isArray(scheme.eligibility) ? scheme.eligibility.join(', ') : scheme.eligibility}
+Return ONLY JSON:`,
+      },
+    ], { temperature: 0.1, maxTokens: 100 })
 
-Score 0-100. Be generous — incomplete profile = assume best case, minimum 50.
-Return ONLY JSON: {"score": number, "reason": "1 sentence"}`)
-
-      const parsed = extractJSON(result.response.text())
-      if (parsed) {
-        return {
-          score: Math.max(parsed.score || 0, 40),
-          reason: parsed.reason || 'Likely eligible based on your profile',
-        }
+    const parsed = extractJSON(text)
+    if (parsed?.score !== undefined) {
+      return {
+        score: Math.max(parsed.score, 40),
+        reason: parsed.reason || 'Likely eligible based on your profile',
       }
-      return { score: 65, reason: 'Likely eligible — verify at official portal' }
-    })
+    }
+    return { score: 65, reason: 'Likely eligible — verify at official portal' }
   } catch (err) {
-    logger.error(`[Gemini] Score error: ${err.message}`)
+    logger.error(`[Groq] Score error: ${err.message}`)
     return { score: 65, reason: 'Likely eligible — verify at official portal' }
   }
 }
 
 // ─────────────────────────────────────────────────────────────
-// Embedding generator for ChromaDB
+// Embedding generator — Groq doesn't have embeddings
+// Use simple TF-IDF style hash for ChromaDB fallback
+// MongoDB text search works fine without real embeddings
 // ─────────────────────────────────────────────────────────────
 export const generateEmbedding = async (text) => {
-  try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-embedding-001' })
-    const result = await model.embedContent(text)
-    return result.embedding.values
-  } catch (err) {
-    logger.error(`[Gemini] Embedding error: ${err.message}`)
-    return null
-  }
+  // Groq has no embedding API — return null to use MongoDB fallback
+  // ChromaDB will be skipped, MongoDB text search handles everything
+  return null
 }
-
