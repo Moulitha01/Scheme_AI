@@ -1,6 +1,4 @@
 // backend/src/services/documentIngestor.js
-// Drop any PDF/TXT into backend/documents/ — auto-ingests into ChromaDB on server start
-
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -11,119 +9,95 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DOCS_DIR = path.join(__dirname, '../../documents')
 const PROCESSED_LOG = path.join(__dirname, '../../documents/.processed.json')
 
-// ── Ensure documents folder exists ──────────────────────────
 export function ensureDocumentsFolder() {
   if (!fs.existsSync(DOCS_DIR)) {
     fs.mkdirSync(DOCS_DIR, { recursive: true })
     logger.info(`📁 Created documents folder: ${DOCS_DIR}`)
-    fs.writeFileSync(
-      path.join(DOCS_DIR, 'README.txt'),
-      `SCHEME-AI DOCUMENTS FOLDER
-==========================
-Drop government scheme PDFs or text files here.
-They will be automatically ingested into the RAG system on next server start.
-
-Supported: .pdf, .txt, .md
-Example: PM-KISAN_2024.pdf
-
-No code changes needed — just drop the file and restart the server.
-`
-    )
+    fs.writeFileSync(path.join(DOCS_DIR, 'README.txt'),
+      `SCHEME-AI DOCUMENTS FOLDER\nDrop government scheme PDFs here.\nSupported: .pdf, .txt, .md\n`)
   }
 }
 
-// ── Load / save processed log ────────────────────────────────
 function loadProcessedLog() {
   try {
-    if (fs.existsSync(PROCESSED_LOG)) {
+    if (fs.existsSync(PROCESSED_LOG))
       return JSON.parse(fs.readFileSync(PROCESSED_LOG, 'utf-8'))
-    }
-  } catch { /* ignore */ }
+  } catch { }
   return {}
 }
 
 function saveProcessedLog(log) {
-  try {
-    fs.writeFileSync(PROCESSED_LOG, JSON.stringify(log, null, 2))
-  } catch (e) {
-    logger.warn(`Could not save processed log: ${e.message}`)
-  }
+  try { fs.writeFileSync(PROCESSED_LOG, JSON.stringify(log, null, 2)) } catch { }
 }
 
-// ── Extract text from PDF ─────────────────────────────────────
 async function extractPdfText(filePath) {
   try {
     const { default: pdfParse } = await import('pdf-parse/lib/pdf-parse.js')
-    const buffer = fs.readFileSync(filePath)
-    const data = await pdfParse(buffer)
+    const data = await pdfParse(fs.readFileSync(filePath))
     return data.text
   } catch (e) {
-    logger.warn(`PDF parse error for ${filePath}: ${e.message}`)
+    logger.warn(`PDF parse error: ${e.message}`)
     return null
   }
 }
 
-// ── Chunk text ───────────────────────────────────────────────
 function chunkText(text, chunkSize = 2000, overlap = 200) {
   const chunks = []
   const clean = text.replace(/\s+/g, ' ').trim()
   let start = 0
   while (start < clean.length) {
-    const end = Math.min(start + chunkSize, clean.length)
-    const chunk = clean.slice(start, end).trim()
+    const chunk = clean.slice(start, Math.min(start + chunkSize, clean.length)).trim()
     if (chunk.length > 100) chunks.push(chunk)
     start += chunkSize - overlap
   }
   return chunks
 }
 
-// ── Use Gemini to extract scheme data from text chunk ────────
+// ── Use Groq to extract scheme data from text chunk ──────────
 async function parseSchemeFromText(text, fileName) {
   try {
-    const { GoogleGenerativeAI } = await import('@google/generative-ai')
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
-    const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-2.0-flash' })
+    const Groq = (await import('groq-sdk')).default
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
 
-    const prompt = `
-Extract all Indian government schemes from this text from "${fileName}".
-Return ONLY a valid JSON array. Each item must have:
-{
-  "name": "scheme name",
-  "ministry": "ministry name",
-  "category": "Agriculture|Health|Education|Housing|Finance|Employment|Women & Child|Other",
-  "state": "Central or state name",
-  "description": "2-3 sentence description",
-  "eligibility": ["criteria 1", "criteria 2"],
-  "benefit": "benefit description",
-  "documents": ["document 1"],
-  "applyLink": ""
-}
-If no schemes found return [].
-Return ONLY the JSON array.
+    const result = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      max_tokens: 1000,
+      messages: [
+        {
+          role: 'system',
+          content: 'Extract Indian government schemes from text. Return ONLY a valid JSON array, no markdown, no explanation.',
+        },
+        {
+          role: 'user',
+          content: `Extract all government schemes from this text (source: "${fileName}").
+Each item must have: name, ministry, category (Agriculture|Health|Education|Housing|Finance|Employment|Women & Child|Other), state (Central or state name), description, eligibility (array of strings), benefit, documents (array), applyLink.
+If no schemes found, return [].
 
-Text: ${text.slice(0, 3000)}
-`.trim()
+Text:
+${text.slice(0, 3000)}
 
-    const result = await model.generateContent(prompt)
-    const raw = result.response.text().trim().replace(/```json|```/g, '').trim()
-    const parsed = JSON.parse(raw)
+Return ONLY the JSON array:`,
+        },
+      ],
+    })
+
+    const raw = result.choices[0]?.message?.content?.replace(/```json|```/g, '').trim() || '[]'
+    const match = raw.match(/\[[\s\S]*\]/)
+    const parsed = JSON.parse(match ? match[0] : '[]')
     return Array.isArray(parsed) ? parsed : []
   } catch (e) {
-    logger.warn(`Gemini extraction failed: ${e.message}`)
+    logger.warn(`Groq extraction failed: ${e.message}`)
     return []
   }
 }
 
-// ── Main export ───────────────────────────────────────────────
 export async function ingestDocumentsFolder() {
   ensureDocumentsFolder()
 
   const processedLog = loadProcessedLog()
   const files = fs.readdirSync(DOCS_DIR).filter(f => {
     const ext = path.extname(f).toLowerCase()
-    return ['.pdf', '.txt', '.md'].includes(ext)
-      && !f.startsWith('.')
-      && f.toLowerCase() !== 'readme.txt'
+    return ['.pdf', '.txt', '.md'].includes(ext) && !f.startsWith('.') && f.toLowerCase() !== 'readme.txt'
   })
 
   if (files.length === 0) {
@@ -159,7 +133,7 @@ export async function ingestDocumentsFolder() {
       }
 
       const chunks = chunkText(rawText)
-      logger.info(`    📦 ${chunks.length} chunks — extracting schemes with Gemini...`)
+      logger.info(`    📦 ${chunks.length} chunks — extracting schemes with Groq...`)
 
       const allSchemes = []
       const seenNames = new Set()
@@ -179,7 +153,6 @@ export async function ingestDocumentsFolder() {
         logger.info(`    🎯 Found ${allSchemes.length} scheme(s) — ingesting...`)
         await ingestSchemes(allSchemes)
       } else {
-        // Fallback: ingest raw chunks directly
         logger.info(`    📝 No structured schemes found — ingesting ${chunks.length} raw chunks`)
         const rawSchemes = chunks.map((chunk, i) => ({
           name: `${path.basename(file, ext)} — Part ${i + 1}`,

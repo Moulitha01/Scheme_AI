@@ -371,7 +371,7 @@ export default function HomePage() {
           Team: Dilli Basker M · Moulitha C · Mohan B · Jothika J
         </div>
         <div className="text-[11px] text-[#9FB3C8]">
-          Powered by Gemini 1.5 · LangChain · MongoDB · Vite ·chromadb
+          Powered by Groq · LangChain · MongoDB · Vite ·chromadb
         </div>
       </footer>
       <div className="h-[3px] bg-gradient-to-r from-[#FF8A00] via-[#22c55e] to-[#2DD4BF]" />
