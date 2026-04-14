@@ -3,7 +3,7 @@
 > Voice-first AI agent that helps every Indian citizen discover, understand & apply for 1,000+ government welfare schemes — in their own language, with zero forms.
 
 **Built at HackNova 3.0** by Team from Jaya Engineering College  
-Track: Generative AI — Social Impact
+Track: Generative AI — Social Impact system 
 
 ---
 
