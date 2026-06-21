@@ -13,7 +13,7 @@ import schemeRoutes from './routes/schemes.js'
 import ocrRoutes from './routes/ocr.js'
 import userRoutes from './routes/users.js'
 import a2aRoutes from './routes/a2a.js'
-import { crawlGovernmentSchemes } from './services/govCrawler.js'
+import { crawlGovernmentSchemes } from './services/GovCrawler.js'
 import { ingestDocumentsFolder, ensureDocumentsFolder } from './services/documentIngestor.js'
 
 dotenv.config()
