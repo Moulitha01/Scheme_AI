@@ -1,5 +1,13 @@
 import dotenv from 'dotenv'
-dotenv.config({ path: './.env' })
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+dotenv.config({ path: 'C:\\Users\\mouli\\Desktop\\schemeai\\GenX\\scheme-ai\\backend\\.env' })
+// TEMP DEBUG - remove after fixing
+console.log('GROQ KEY:', process.env.GROQ_API_KEY?.slice(0, 8))
+console.log('FULL KEY LENGTH:', process.env.GROQ_API_KEY?.length)
 import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
@@ -15,8 +23,6 @@ import userRoutes from './routes/users.js'
 import a2aRoutes from './routes/a2a.js'
 import { crawlGovernmentSchemes } from './services/GovCrawler.js'
 import { ingestDocumentsFolder, ensureDocumentsFolder } from './services/documentIngestor.js'
-
-dotenv.config()
 
 const app = express()
 const PORT = process.env.PORT || 5000
