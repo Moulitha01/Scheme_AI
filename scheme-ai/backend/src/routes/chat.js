@@ -43,14 +43,22 @@ router.post('/message', async (req, res) => {
       if (v !== null && v !== undefined) newProfile[k] = v
     }
 
-    // Merge with session history
+    // Merge with session history (accumulate profile across messages)
     const mergedProfile = { ...(session.userProfile || {}) }
     for (const [k, v] of Object.entries(newProfile)) {
-      if (v !== null && v !== undefined) mergedProfile[k] = v
+      if (v !== null && v !== undefined) {
+        // FIX: deduplicate need_category instead of pushing duplicates
+        if (k === 'need_category' && Array.isArray(v)) {
+          const existing = mergedProfile.need_category || []
+          mergedProfile.need_category = [...new Set([...existing, ...v])]
+        } else {
+          mergedProfile[k] = v
+        }
+      }
     }
     session.userProfile = mergedProfile
 
-    logger.info(`Profile: age=${mergedProfile.age}, gender=${mergedProfile.gender}, occ=${mergedProfile.occupation}, state=${mergedProfile.state}`)
+    logger.info(`Profile: age=${mergedProfile.age}, gender=${mergedProfile.gender}, occ=${mergedProfile.occupation}, state=${mergedProfile.state}, caste=${mergedProfile.caste}`)
 
     // Get schemes from RAG or DB
     let ragSchemes = []
@@ -59,14 +67,15 @@ router.post('/message', async (req, res) => {
       try { ragSchemes = await mongoTextSearch(message, mergedProfile, 10) } catch { }
     }
 
+    // FIX: map eligibilityCriteria (DB field) correctly — don't use 'eligibility' from DB
     const schemesForScoring = ragSchemes.length > 0
       ? ragSchemes.map(r => ({ ...(r.metadata || {}), ...r }))
       : await Scheme.find({ isActive: true }).lean()
 
-    // Keyword scoring (always works)
-    let topSchemes = matchSchemesByProfile(schemesForScoring, mergedProfile, message).slice(0, 6)
+    // Keyword scoring pass — matchSchemesByProfile uses 'eligibilityCriteria' now
+    let topSchemes = matchSchemesByProfile(schemesForScoring, mergedProfile, message).slice(0, 8)
 
-    // Try Groq scoring to improve accuracy
+    // FIX: Groq scoring — keep score as separate numeric field, don't overwrite eligibilityCriteria
     try {
       const enhanced = await Promise.all(
         topSchemes.map(async (s) => {
@@ -74,29 +83,47 @@ router.post('/message', async (req, res) => {
             const scored = await scoreEligibility(mergedProfile, {
               name: s.name,
               description: s.description || '',
-              eligibility: Array.isArray(s.eligibility) ? s.eligibility : [],
+              // FIX: pass eligibilityCriteria (string array) to Groq for context
+              eligibility: Array.isArray(s.eligibilityCriteria)
+                ? s.eligibilityCriteria
+                : [],
             })
-            return { ...s, eligibility: Math.max(scored.score || 0, s.eligibility), reason: scored.reason || s.reason }
+            return {
+              ...s,
+              // FIX: store numeric score in 'matchScore', never overwrite 'eligibilityCriteria'
+              matchScore: Math.max(scored.score || 0, s.matchScore || 0),
+              reason: scored.reason || s.reason,
+            }
           } catch { return s }
         })
       )
-      topSchemes = enhanced.sort((a, b) => b.eligibility - a.eligibility)
+      topSchemes = enhanced.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0))
     } catch { }
 
-    topSchemes = topSchemes.map(s => ({
+    // FIX: final shape uses 'matchScore' for the percentage shown in UI
+    topSchemes = topSchemes.slice(0, 6).map(s => ({
       name: s.name || 'Unknown Scheme',
       ministry: s.ministry || 'Government of India',
       benefit: s.benefit || 'Check official portal',
       category: s.category || 'General',
-      eligibility: Math.max(s.eligibility || 0, 40),
+      // FIX: matchScore is always a clean number now
+      eligibility: Math.min(Math.max(s.matchScore || 45, 40), 95),
       reason: s.reason || 'May be eligible — verify at official portal',
       applyLink: s.applyLink || '',
+      // send eligibilityCriteria separately so UI can show criteria text
+      eligibilityCriteria: Array.isArray(s.eligibilityCriteria) ? s.eligibilityCriteria : [],
     }))
 
     // Generate reply
     let reply = ''
     try {
-      reply = await generateAIReply({ message, history: session.messages.slice(-6), userProfile: mergedProfile, matchedSchemes: topSchemes, language })
+      reply = await generateAIReply({
+        message,
+        history: session.messages.slice(-6),
+        userProfile: mergedProfile,
+        matchedSchemes: topSchemes,
+        language,
+      })
     } catch {
       reply = (FALLBACK_REPLIES[language] || FALLBACK_REPLIES.English)(topSchemes.length, mergedProfile.name)
     }

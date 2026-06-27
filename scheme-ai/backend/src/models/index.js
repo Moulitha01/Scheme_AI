@@ -30,17 +30,29 @@ const schemeSchema = new mongoose.Schema({
   },
   state: { type: String, default: 'Central' },
   description: String,
-  eligibility: [String],
+  // FIX: renamed from 'eligibility' (was [String]) to 'eligibilityCriteria'
+  // to avoid collision with the numeric eligibility score in chat.js
+  eligibilityCriteria: [String],
   benefit: String,
   benefitAmount: String,
   documents: [String],
   applyLink: String,
   lastUpdated: { type: Date, default: Date.now },
   isActive: { type: Boolean, default: true },
-  vectorId: String, // ChromaDB reference
+  vectorId: String,
 })
 
-schemeSchema.index({ name: 'text', description: 'text', category: 1 })
+// FIX: expanded text index to include ministry, benefit, eligibilityCriteria
+// so keyword searches match more relevant schemes
+schemeSchema.index({
+  name: 'text',
+  description: 'text',
+  ministry: 'text',
+  benefit: 'text',
+  eligibilityCriteria: 'text',
+}, { weights: { name: 10, description: 5, ministry: 3, benefit: 3, eligibilityCriteria: 4 } })
+
+schemeSchema.index({ category: 1, state: 1, isActive: 1 })
 
 // ── User ──
 const userSchema = new mongoose.Schema({

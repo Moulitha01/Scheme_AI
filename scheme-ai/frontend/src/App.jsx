@@ -1,7 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Navbar from './components/Navbar'
 import ProtectedRoute from './components/ProtectedRoute'
-import IntroPage from './pages/IntroPage'
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
 import HomePage from './pages/HomePage'
@@ -16,7 +15,7 @@ export default function App() {
     <div className="min-h-screen gradient-bg">
       <Routes>
         {/* Entry point */}
-        <Route path="/" element={<IntroPage />} />
+        <Route path="/" element={<LandingPage />} />
         <Route path="/landing" element={<LandingPage />} />
 
         {/* No Navbar — these pages have their own headers */}
