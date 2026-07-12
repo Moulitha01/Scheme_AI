@@ -21,7 +21,7 @@ const sessionSchema = new mongoose.Schema({
 // ── Scheme ──
 const schemeSchema = new mongoose.Schema({
   name: { type: String, required: true, index: true },
-  slug: { type: String, unique: true },
+  slug: { type: String, unique: true , sparse: true },
   ministry: String,
   department: String,
   category: {
