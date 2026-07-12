@@ -21,9 +21,9 @@ import schemeRoutes from './routes/schemes.js'
 import ocrRoutes from './routes/ocr.js'
 import userRoutes from './routes/users.js'
 import a2aRoutes from './routes/a2a.js'
-import { crawlGovernmentSchemes } from './services/GovCrawler.js'
+import { crawlGovernmentSchemes, startWeeklyCrawlCron } from './services/GovCrawler.js'
 import { ingestDocumentsFolder, ensureDocumentsFolder } from './services/documentIngestor.js'
-
+startWeeklyCrawlCron()
 const app = express()
 const PORT = process.env.PORT || 5000
 

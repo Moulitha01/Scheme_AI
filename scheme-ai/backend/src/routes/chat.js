@@ -73,7 +73,7 @@ router.post('/message', async (req, res) => {
       : await Scheme.find({ isActive: true }).lean()
 
     // Keyword scoring pass — matchSchemesByProfile uses 'eligibilityCriteria' now
-    let topSchemes = matchSchemesByProfile(schemesForScoring, mergedProfile, message).slice(0, 8)
+    let topSchemes = matchSchemesByProfile(schemesForScoring, mergedProfile, message).slice(0, 3)
 
     // FIX: Groq scoring — keep score as separate numeric field, don't overwrite eligibilityCriteria
     try {
@@ -101,7 +101,7 @@ router.post('/message', async (req, res) => {
     } catch { }
 
     // FIX: final shape uses 'matchScore' for the percentage shown in UI
-    topSchemes = topSchemes.slice(0, 6).map(s => ({
+    topSchemes = topSchemes.slice(0, 3).map(s => ({
       name: s.name || 'Unknown Scheme',
       ministry: s.ministry || 'Government of India',
       benefit: s.benefit || 'Check official portal',
