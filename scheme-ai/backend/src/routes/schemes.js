@@ -1,6 +1,7 @@
 import express from 'express'
 import { Scheme } from '../models/index.js'
 import { ingestSchemes } from '../services/rag.js'
+import { crawlGovernmentSchemes } from '../services/GovCrawler.js'
 import { logger } from '../utils/logger.js'
 
 const router = express.Router()
@@ -26,9 +27,14 @@ router.get('/', async (req, res) => {
 
     res.json({ schemes, total, page: Number(page), pages: Math.ceil(total / limit) })
   } catch (err) {
-    // Return mock data if DB unavailable
     res.json({ schemes: MOCK_SCHEMES, total: MOCK_SCHEMES.length, page: 1, pages: 1 })
   }
+})
+
+// GET /api/schemes/meta/categories
+router.get('/meta/categories', async (req, res) => {
+  const categories = ['Agriculture', 'Education', 'Health', 'Housing', 'Women & Child', 'Finance', 'Employment', 'Disability']
+  res.json(categories)
 })
 
 // GET /api/schemes/:id
@@ -42,10 +48,25 @@ router.get('/:id', async (req, res) => {
   }
 })
 
-// POST /api/schemes/seed — seed initial schemes
+// POST /api/admin/refresh-schemes — trigger crawl
+// supports ?puppeteer=true for full Puppeteer scrape
+router.post('/admin/refresh-schemes', async (req, res) => {
+  try {
+    const usePuppeteer = req.query.puppeteer === 'true'
+    logger.info(`🔄 Manual scheme refresh triggered (puppeteer=${usePuppeteer})`)
+    res.json({ success: true, message: 'Schemes refreshed from government websites' })
+    // Run in background so request doesn't timeout
+    crawlGovernmentSchemes({ forceRefresh: true, usePuppeteer }).catch(err =>
+      logger.error(`Background crawl error: ${err.message}`)
+    )
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// POST /api/schemes/seed — seed fallback schemes
 router.post('/seed', async (req, res) => {
   try {
-    await Scheme.insertMany(SEED_SCHEMES, { ordered: false })
     await ingestSchemes(SEED_SCHEMES)
     res.json({ message: `Seeded ${SEED_SCHEMES.length} schemes`, count: SEED_SCHEMES.length })
   } catch (err) {
@@ -53,106 +74,90 @@ router.post('/seed', async (req, res) => {
   }
 })
 
-// GET /api/schemes/categories
-router.get('/meta/categories', async (req, res) => {
-  const categories = ['Agriculture', 'Education', 'Health', 'Housing', 'Women & Child', 'Finance', 'Employment', 'Disability']
-  res.json(categories)
-})
-
 export default router
 
-// ── Seed Data ──
+// ── Seed/Mock Data ─────────────────────────────────────────────
 export const SEED_SCHEMES = [
   {
     name: 'PM-KISAN Samman Nidhi',
     ministry: 'Ministry of Agriculture & Farmers Welfare',
-    category: 'Agriculture',
-    state: 'Central',
-    description: 'Direct income support of Rs.6000/year to all landholding farmers\' families with cultivable land.',
-    eligibility: ['Landholding farmer', 'Indian citizen', 'Land ownership record required', 'Not a govt. employee or taxpayer'],
+    category: 'Agriculture', state: 'Central',
+    description: 'Direct income support of ₹6,000/year to landholding farmer families.',
+    eligibilityCriteria: ['Landholding farmer', 'Indian citizen', 'Not a govt employee or taxpayer'],
     benefit: '₹6,000/year',
-    benefitAmount: '6000',
-    documents: ['Aadhaar Card', 'Land ownership document', 'Bank account details'],
+    documents: ['Aadhaar Card', 'Land ownership document', 'Bank account'],
     applyLink: 'https://pmkisan.gov.in',
   },
   {
     name: 'Ayushman Bharat PM-JAY',
     ministry: 'Ministry of Health & Family Welfare',
-    category: 'Health',
-    state: 'Central',
-    description: 'Health insurance coverage of Rs.5 lakh per family per year for secondary and tertiary hospitalization.',
-    eligibility: ['SECC 2011 listed households', 'Deprived rural families', 'Urban workers in specific categories'],
+    category: 'Health', state: 'Central',
+    description: 'Health insurance of ₹5 lakh per family per year.',
+    eligibilityCriteria: ['SECC 2011 listed households', 'BPL families'],
     benefit: '₹5 lakh/year health cover',
-    benefitAmount: '500000',
-    documents: ['Aadhaar Card', 'Ration Card', 'SECC verification'],
+    documents: ['Aadhaar Card', 'Ration Card'],
     applyLink: 'https://pmjay.gov.in',
   },
   {
     name: 'PM Ujjwala Yojana',
     ministry: 'Ministry of Petroleum & Natural Gas',
-    category: 'Women & Child',
-    state: 'Central',
-    description: 'Free LPG connections to women from BPL/poor households to promote clean cooking fuel.',
-    eligibility: ['BPL household woman', 'No existing LPG connection', 'Age 18 or above', 'BPL ration card holder'],
-    benefit: 'Free LPG connection + ₹1600 subsidy',
+    category: 'Women & Child', state: 'Central',
+    description: 'Free LPG connections to BPL women for clean cooking.',
+    eligibilityCriteria: ['BPL woman', 'No existing LPG', 'Age 18+'],
+    benefit: 'Free LPG + ₹1,600 subsidy',
     documents: ['BPL Ration Card', 'Aadhaar Card', 'Bank account'],
     applyLink: 'https://pmuy.gov.in',
   },
   {
-    name: 'National Scholarship Portal',
+    name: 'National Scholarship Portal (NSP)',
     ministry: 'Ministry of Education',
-    category: 'Education',
-    state: 'Central',
-    description: 'Scholarships for students from minority, SC/ST, OBC communities and merit-based awards for education.',
-    eligibility: ['Student in recognized institution', 'Family income below Rs.2.5 lakh/year', 'Minimum 50% marks in last exam'],
+    category: 'Education', state: 'Central',
+    description: 'Scholarships for SC/ST/OBC/minority students.',
+    eligibilityCriteria: ['Student in recognized institution', 'Income below ₹2.5 lakh', 'Min 50% marks'],
     benefit: 'Up to ₹50,000/year',
-    documents: ['School/College ID', 'Income certificate', 'Caste certificate', 'Bank account'],
+    documents: ['College ID', 'Income certificate', 'Caste certificate'],
     applyLink: 'https://scholarships.gov.in',
   },
   {
     name: 'PM Awas Yojana - Gramin',
     ministry: 'Ministry of Rural Development',
-    category: 'Housing',
-    state: 'Central',
-    description: 'Financial assistance to BPL households in rural areas for construction of pucca house with basic amenities.',
-    eligibility: ['Rural household', 'No pucca house', 'SECC 2011 listed', 'Priority to SC/ST and minorities'],
-    benefit: '₹1.3 lakh (plains) / ₹1.5 lakh (hills)',
-    documents: ['Aadhaar Card', 'SECC listing proof', 'Land document', 'Bank account'],
+    category: 'Housing', state: 'Central',
+    description: 'Housing assistance for BPL rural families.',
+    eligibilityCriteria: ['Rural BPL household', 'No pucca house', 'SECC listed'],
+    benefit: '₹1.2-1.3 lakh for house construction',
+    documents: ['Aadhaar Card', 'SECC proof', 'Land document'],
     applyLink: 'https://pmayg.nic.in',
   },
   {
     name: 'MGNREGA',
     ministry: 'Ministry of Rural Development',
-    category: 'Employment',
-    state: 'Central',
-    description: 'Guaranteed 100 days of unskilled manual employment per year to rural households at minimum wage.',
-    eligibility: ['Rural adult aged 18+', 'Willing to do unskilled manual work', 'Resident of the Gram Panchayat'],
-    benefit: '100 days employment @ ₹220-300/day',
-    documents: ['Job Card (from Gram Panchayat)', 'Aadhaar Card', 'Bank account'],
+    category: 'Employment', state: 'Central',
+    description: '100 days guaranteed employment for rural households.',
+    eligibilityCriteria: ['Rural adult 18+', 'Unskilled manual work'],
+    benefit: '100 days at ₹220-300/day',
+    documents: ['Job Card', 'Aadhaar Card', 'Bank account'],
     applyLink: 'https://nrega.nic.in',
   },
   {
     name: 'MUDRA Yojana',
     ministry: 'Ministry of Finance',
-    category: 'Finance',
-    state: 'Central',
-    description: 'Collateral-free micro loans to non-corporate small/micro businesses in manufacturing, trading and service sectors.',
-    eligibility: ['Micro/small business owner', 'Non-farm income activity', 'No default history', 'Indian citizen'],
-    benefit: 'Loan up to ₹10 lakh (no collateral)',
-    documents: ['Business proof', 'Identity proof', 'Address proof', 'Bank statements'],
+    category: 'Finance', state: 'Central',
+    description: 'Collateral-free micro loans for small businesses.',
+    eligibilityCriteria: ['Small business owner', 'Non-farm activity'],
+    benefit: 'Loan up to ₹10 lakh',
+    documents: ['Business proof', 'Aadhaar Card', 'Bank statements'],
     applyLink: 'https://mudra.org.in',
   },
   {
     name: 'Sukanya Samriddhi Yojana',
     ministry: 'Ministry of Finance',
-    category: 'Women & Child',
-    state: 'Central',
-    description: 'Small savings scheme for girl child for education and marriage with attractive interest rates and tax benefits.',
-    eligibility: ['Girl child below 10 years', 'Parent or legal guardian', 'Indian resident', 'Only 2 accounts per family'],
-    benefit: '8.2% interest rate + tax exemption',
-    documents: ['Birth certificate of girl', 'Parent Aadhaar', 'Address proof'],
-    applyLink: 'https://www.india.gov.in',
+    category: 'Women & Child', state: 'Central',
+    description: 'Savings scheme for girl child with 8.2% interest.',
+    eligibilityCriteria: ['Girl child below 10', 'Parent/guardian', 'Max 2 per family'],
+    benefit: '8.2% interest + tax exemption',
+    documents: ['Birth certificate', 'Parent Aadhaar'],
+    applyLink: 'https://www.indiapost.gov.in',
   },
 ]
 
-const MOCK_SCHEMES = SEED_SCHEMES.map((s, i) => ({ ...s, _id: `mock_${i}`, id: i + 1, match: 80 + i }))
+const MOCK_SCHEMES = SEED_SCHEMES.map((s, i) => ({ ...s, _id: `mock_${i}`, id: i + 1 }))

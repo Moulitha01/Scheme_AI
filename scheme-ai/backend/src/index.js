@@ -1,13 +1,11 @@
 import dotenv from 'dotenv'
 import { fileURLToPath } from 'url'
-import { dirname, join } from 'path'
+import { dirname } from 'path'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 dotenv.config({ path: 'C:\\Users\\mouli\\Desktop\\schemeai\\GenX\\scheme-ai\\backend\\.env' })
-// TEMP DEBUG - remove after fixing
-console.log('GROQ KEY:', process.env.GROQ_API_KEY?.slice(0, 8))
-console.log('FULL KEY LENGTH:', process.env.GROQ_API_KEY?.length)
+
 import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
@@ -23,7 +21,9 @@ import userRoutes from './routes/users.js'
 import a2aRoutes from './routes/a2a.js'
 import { crawlGovernmentSchemes, startWeeklyCrawlCron } from './services/GovCrawler.js'
 import { ingestDocumentsFolder, ensureDocumentsFolder } from './services/documentIngestor.js'
+
 startWeeklyCrawlCron()
+
 const app = express()
 const PORT = process.env.PORT || 5000
 
@@ -36,7 +36,6 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
-// Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -56,12 +55,22 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', service: 'Scheme-AI Backend', version: '1.0.0' })
 })
 
-// Force re-crawl government websites
+// Force re-crawl — supports ?puppeteer=true for full scrape
 app.post('/api/admin/refresh-schemes', async (req, res) => {
   try {
-    logger.info('🔄 Manual scheme refresh triggered')
-    await crawlGovernmentSchemes({ forceRefresh: true })
-    res.json({ success: true, message: 'Schemes refreshed from government websites' })
+    const usePuppeteer = req.query.puppeteer === 'true'
+    logger.info(`🔄 Manual scheme refresh triggered (puppeteer=${usePuppeteer})`)
+    // Respond immediately so request doesn't timeout
+    res.json({
+      success: true,
+      message: usePuppeteer
+        ? 'Full Puppeteer scrape started — check terminal (takes 5-10 mins)'
+        : 'Schemes refreshed from government websites',
+    })
+    // Run in background
+    crawlGovernmentSchemes({ forceRefresh: true, usePuppeteer }).catch(err =>
+      logger.error(`Background crawl error: ${err.message}`)
+    )
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -83,14 +92,8 @@ app.use((err, req, res, next) => {
 // ── Start ─────────────────────────────────────────────────────
 const start = async () => {
   await connectDB()
-
-  // Ensure documents folder exists
   ensureDocumentsFolder()
-
-  // Crawl government websites for latest schemes (cached 24h)
   crawlGovernmentSchemes().catch(e => logger.warn(`Crawl skipped: ${e.message}`))
-
-  // Ingest any PDFs dropped in backend/documents/
   ingestDocumentsFolder().catch(e => logger.warn(`Doc ingest skipped: ${e.message}`))
 
   app.listen(PORT, () => {
