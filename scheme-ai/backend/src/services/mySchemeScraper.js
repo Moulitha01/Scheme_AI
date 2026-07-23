@@ -214,3 +214,4 @@ export async function scrapeMySchemePortal() {
       try { await browser.close() } catch { }
     }
   }
+}
