@@ -4,14 +4,14 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { logger } from '../utils/logger.js'
 import { ingestSchemes } from './rag.js'
-import { scrapeMySchemePortal } from './mySchemeScraper.js'
+import { importHuggingFaceDataset, isHFImportNeeded } from './hfImporter.js'
+import { checkSitemapForUpdates, shouldCheckSitemap } from './sitemapChecker.js'
 import axios from 'axios'
 import cron from 'node-cron'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const CRAWL_CACHE_FILE = path.join(__dirname, '../../.crawl-cache.json')
 
-// ── Fallback curated schemes (used if scraping fails) ─────────
+// ── Fallback curated schemes ──────────────────────────────────
 const FALLBACK_SCHEMES = [
   {
     name: 'PM-KISAN Samman Nidhi',
@@ -165,18 +165,6 @@ const FALLBACK_SCHEMES = [
   },
 ]
 
-function loadCache() {
-  try {
-    if (fs.existsSync(CRAWL_CACHE_FILE))
-      return JSON.parse(fs.readFileSync(CRAWL_CACHE_FILE, 'utf-8'))
-  } catch { }
-  return { lastCrawled: null, schemeCount: 0, lastScraped: null }
-}
-
-function saveCache(data) {
-  try { fs.writeFileSync(CRAWL_CACHE_FILE, JSON.stringify(data, null, 2)) } catch { }
-}
-
 // ── Try MyScheme API ──────────────────────────────────────────
 async function fetchMySchemeAPI() {
   try {
@@ -204,67 +192,41 @@ async function fetchMySchemeAPI() {
 }
 
 // ── Main crawl ────────────────────────────────────────────────
-export async function crawlGovernmentSchemes({ forceRefresh = false, usePuppeteer = false } = {}) {
+export async function crawlGovernmentSchemes({ forceRefresh = false } = {}) {
   try {
-    const cache = loadCache()
-    const hoursSince = cache.lastCrawled
-      ? (Date.now() - new Date(cache.lastCrawled).getTime()) / 3600000
-      : 999
-
-    if (!forceRefresh && hoursSince < 24) {
-      logger.info(`🌐 Skipping crawl — last crawled ${Math.round(hoursSince)}h ago (${cache.schemeCount} schemes in DB)`)
-      return
+    // Step 1: One-time HuggingFace PDF import (2877 schemes)
+    const hfNeeded = await isHFImportNeeded()
+    if (hfNeeded) {
+      logger.info('📚 Starting HuggingFace dataset import (this runs once)...')
+      await importHuggingFaceDataset({ batchSize: 50 })
     }
 
-    logger.info('🌐 Starting scheme data refresh...')
+    // Step 2: Weekly sitemap diff — only fetch new/removed schemes
+    if (forceRefresh || shouldCheckSitemap()) {
+      logger.info('🗺️  Running weekly sitemap check...')
+      await checkSitemapForUpdates()
+    }
 
-    let allSchemes = []
+    // Step 3: Always ensure fallback schemes exist
     const seenNames = new Set()
-
-    // Try Puppeteer scraping if requested
-    if (usePuppeteer) {
-      try {
-        logger.info('🤖 Using Puppeteer to scrape myscheme.gov.in...')
-        const scraped = await scrapeMySchemePortal({ maxSchemesPerCategory: 30 })
-        for (const s of scraped) {
-          if (!seenNames.has(s.name.toLowerCase())) {
-            allSchemes.push(s)
-            seenNames.add(s.name.toLowerCase())
-          }
-        }
-        logger.info(`  🌐 Puppeteer: ${allSchemes.length} schemes scraped`)
-      } catch (err) {
-        logger.warn(`Puppeteer scrape failed: ${err.message} — using fallback`)
-      }
-    }
-
-    // Try MyScheme API
-    const apiSchemes = await fetchMySchemeAPI()
-    logger.info(`  📡 MyScheme API: ${apiSchemes.length} schemes`)
-    for (const s of apiSchemes) {
-      if (!seenNames.has(s.name.toLowerCase())) {
-        allSchemes.push(s)
-        seenNames.add(s.name.toLowerCase())
-      }
-    }
-
-    // Always add fallback schemes
     for (const s of FALLBACK_SCHEMES) {
       if (!seenNames.has(s.name.toLowerCase())) {
-        allSchemes.push(s)
         seenNames.add(s.name.toLowerCase())
       }
     }
+    await ingestSchemes(FALLBACK_SCHEMES)
 
-    logger.info(`  📊 Total schemes to ingest: ${allSchemes.length}`)
-    await ingestSchemes(allSchemes)
+    // Step 4: Try MyScheme API for any bonus schemes
+    const apiSchemes = await fetchMySchemeAPI()
+    if (apiSchemes.length > 0) {
+      logger.info(`  📡 MyScheme API: ${apiSchemes.length} schemes`)
+      await ingestSchemes(apiSchemes)
+    }
 
-    saveCache({
-      lastCrawled: new Date().toISOString(),
-      schemeCount: allSchemes.length,
-      lastScraped: usePuppeteer ? new Date().toISOString() : cache.lastScraped,
-    })
-    logger.info(`✅ Crawl complete: ${allSchemes.length} schemes ingested`)
+    // Log total
+    const { Scheme } = await import('../models/index.js')
+    const total = await Scheme.countDocuments({ isActive: true })
+    logger.info(`✅ Total active schemes in DB: ${total}`)
 
   } catch (err) {
     logger.error(`Crawl error: ${err.message}`)
@@ -275,19 +237,13 @@ export async function forceRefreshSchemes() {
   return crawlGovernmentSchemes({ forceRefresh: true })
 }
 
-// Weekly cron — normal refresh daily, full Puppeteer scrape weekly
+// ── Cron jobs ─────────────────────────────────────────────────
 export function startWeeklyCrawlCron() {
-  // Every day at 3 AM — quick API refresh
-  cron.schedule('0 3 * * *', async () => {
-    logger.info('⏰ Daily cron: refreshing schemes via API...')
-    await crawlGovernmentSchemes({ forceRefresh: true, usePuppeteer: false })
-  })
-
-  // Every Sunday at 2 AM — full Puppeteer scrape
+  // Every Sunday at 2 AM — sitemap diff check
   cron.schedule('0 2 * * 0', async () => {
-    logger.info('⏰ Weekly cron: full Puppeteer scrape of myscheme.gov.in...')
-    await crawlGovernmentSchemes({ forceRefresh: true, usePuppeteer: true })
+    logger.info('⏰ Weekly cron: checking sitemap for scheme updates...')
+    await crawlGovernmentSchemes({ forceRefresh: true })
   })
 
-  logger.info('⏰ Cron jobs scheduled: daily API refresh + weekly Puppeteer scrape')
+  logger.info('⏰ Weekly sitemap check cron scheduled (every Sunday 2 AM)')
 }
