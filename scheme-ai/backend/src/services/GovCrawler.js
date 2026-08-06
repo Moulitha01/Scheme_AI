@@ -245,5 +245,5 @@ export function startWeeklyCrawlCron() {
     await crawlGovernmentSchemes({ forceRefresh: true })
   })
 
-  logger.info('⏰ Weekly sitemap check cron scheduled (every Sunday 3 AM)')
+  logger.info('⏰ Weekly sitemap check cron scheduled (every Sunday 2 AM)')
 }
