@@ -76,6 +76,8 @@ function detectState(text) {
     'arunachal pradesh': 'Arunachal Pradesh', 'mizoram': 'Mizoram',
     'sikkim': 'Sikkim', 'jammu': 'Jammu & Kashmir',
     'puducherry': 'Puducherry', 'chandigarh': 'Chandigarh',
+    
+
   }
 
   // Only assign state if central keywords are NOT dominant
