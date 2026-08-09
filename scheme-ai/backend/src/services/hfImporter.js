@@ -53,49 +53,6 @@ function detectCategory(text) {
 
 // ── Detect state from text ────────────────────────────────────
 function detectState(text) {
-  const t = text.toLowerCase()
-  
-  // Skip if it's just a ministry address mention
-  const centralKeywords = ['ministry of', 'government of india', 'central government', 'national scheme', 'pradhan mantri', 'prime minister']
-  const isCentral = centralKeywords.some(k => t.includes(k))
-  
-  const states = {
-    'tamil nadu': 'Tamil Nadu', 'tamilnadu': 'Tamil Nadu',
-    'kerala': 'Kerala', 'karnataka': 'Karnataka',
-    'andhra pradesh': 'Andhra Pradesh', 'telangana': 'Telangana',
-    'maharashtra': 'Maharashtra', 'gujarat': 'Gujarat',
-    'rajasthan': 'Rajasthan', 'uttar pradesh': 'Uttar Pradesh',
-    'bihar': 'Bihar', 'west bengal': 'West Bengal',
-    'madhya pradesh': 'Madhya Pradesh', 'odisha': 'Odisha',
-    'punjab': 'Punjab', 'haryana': 'Haryana',
-    'assam': 'Assam', 'jharkhand': 'Jharkhand',
-    'uttarakhand': 'Uttarakhand', 'himachal pradesh': 'Himachal Pradesh',
-    'goa': 'Goa', 'chhattisgarh': 'Chhattisgarh',
-    'manipur': 'Manipur', 'meghalaya': 'Meghalaya',
-    'tripura': 'Tripura', 'nagaland': 'Nagaland',
-    'arunachal pradesh': 'Arunachal Pradesh', 'mizoram': 'Mizoram',
-    'sikkim': 'Sikkim', 'jammu': 'Jammu & Kashmir',
-    'puducherry': 'Puducherry', 'chandigarh': 'Chandigarh',
-    
-
-  }
-
-  // Only assign state if central keywords are NOT dominant
-  if (!isCentral) {
-    for (const [key, val] of Object.entries(states)) {
-      if (key !== 'delhi' && t.includes(key)) return val
-    }
-  } else {
-    // Even for central schemes, check for explicit state targeting
-    for (const [key, val] of Object.entries(states)) {
-      if (key !== 'delhi' && key !== 'goa') {
-        // Must appear multiple times to be state-specific
-        const count = (t.match(new RegExp(key, 'g')) || []).length
-        if (count >= 2) return val
-      }
-    }
-  }
-
   return 'Central'
 }
 

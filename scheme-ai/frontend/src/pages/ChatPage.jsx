@@ -23,6 +23,7 @@ const CAT = {
   Finance:         { icon: '💳', color: '#8B5CF6' },
   Employment:      { icon: '👷', color: '#00D68F' },
   'Women & Child': { icon: '👩', color: '#FF3D71' },
+  Disability:      { icon: '♿', color: '#0095FF' },
   default:         { icon: '📋', color: '#FF6B00' },
 }
 
@@ -35,7 +36,7 @@ function speak(text, code) {
 }
 
 /* ── Scheme Card ─────────────────────────────────────────── */
-function SchemeCard({ scheme, index }) {
+function SchemeCard({ scheme, index, isState = false }) {
   const [expanded, setExpanded] = useState(false)
   const cat = CAT[scheme.category] || CAT.default
   const score = scheme.eligibility || 40
@@ -44,9 +45,12 @@ function SchemeCard({ scheme, index }) {
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.08 }}
+      transition={{ delay: index * 0.06 }}
       className="rounded-2xl overflow-hidden border"
-      style={{ background: `${cat.color}08`, borderColor: `${cat.color}25` }}
+      style={{
+        background: isState ? `${cat.color}12` : `${cat.color}08`,
+        borderColor: isState ? `${cat.color}40` : `${cat.color}25`,
+      }}
     >
       <div className="p-4">
         <div className="flex items-start gap-3">
@@ -70,14 +74,16 @@ function SchemeCard({ scheme, index }) {
           </div>
         </div>
 
-        <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-xl"
-          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-          <span>💰</span>
-          <div>
-            <p className="text-[10px] text-gray-500 uppercase tracking-wide">Benefit</p>
-            <p className="text-xs font-bold text-white">{scheme.benefit}</p>
+        {scheme.benefit && scheme.benefit !== 'See official portal' && (
+          <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-xl"
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <span>💰</span>
+            <div>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wide">Benefit</p>
+              <p className="text-xs font-bold text-white">{scheme.benefit}</p>
+            </div>
           </div>
-        </div>
+        )}
 
         {scheme.reason && (
           <p className="text-xs text-gray-500 mt-2 italic">"{scheme.reason}"</p>
@@ -122,18 +128,85 @@ function SchemeCard({ scheme, index }) {
             🌐 Apply Online
           </a>
         )}
-        <button className="flex-1 py-2 rounded-xl text-xs font-bold text-white transition-all"
-          style={{ background: `linear-gradient(135deg, ${cat.color}, ${cat.color}99)` }}>
-          📝 Fill Form
-        </button>
+        {scheme.applyLink && (
+          <a href={scheme.applyLink} target="_blank" rel="noreferrer"
+            className="flex-1 flex items-center justify-center py-2 rounded-xl text-xs font-bold text-white transition-all"
+            style={{ background: `linear-gradient(135deg, ${cat.color}, ${cat.color}99)` }}>
+            📝 Fill Form
+          </a>
+        )}
       </div>
     </motion.div>
   )
 }
 
+/* ── Scheme Section (Central or State) ───────────────────── */
+function SchemeSection({ title, icon, schemes, color, isState = false }) {
+  const [collapsed, setCollapsed] = useState(false)
+
+  if (!schemes || schemes.length === 0) return null
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="mt-3"
+    >
+      {/* Section header */}
+      <button
+        onClick={() => setCollapsed(c => !c)}
+        className="w-full flex items-center justify-between px-3 py-2 rounded-xl mb-2 transition-all"
+        style={{
+          background: isState ? 'rgba(0,214,143,0.08)' : 'rgba(255,170,0,0.08)',
+          border: `1px solid ${isState ? 'rgba(0,214,143,0.2)' : 'rgba(255,170,0,0.2)'}`,
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-base">{icon}</span>
+          <span className="text-xs font-bold" style={{ color: isState ? '#00D68F' : '#FFAA00' }}>
+            {title}
+          </span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold"
+            style={{
+              background: isState ? 'rgba(0,214,143,0.15)' : 'rgba(255,170,0,0.15)',
+              color: isState ? '#00D68F' : '#FFAA00',
+            }}>
+            {schemes.length} scheme{schemes.length > 1 ? 's' : ''}
+          </span>
+        </div>
+        <motion.span
+          animate={{ rotate: collapsed ? 180 : 0 }}
+          className="text-gray-500 text-xs"
+        >▼</motion.span>
+      </button>
+
+      <AnimatePresence>
+        {!collapsed && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden space-y-2"
+          >
+            {schemes.map((s, i) => (
+              <SchemeCard key={i} scheme={s} index={i} isState={isState} />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  )
+}
+
 /* ── Message bubble ──────────────────────────────────────── */
-function Message({ msg, langColor }) {
+function Message({ msg, langColor, userState }) {
   const isUser = msg.role === 'user'
+
+  // Split schemes into Central and State-specific
+  const centralSchemes = (msg.schemes || []).filter(s => s.state === 'Central' || !s.state)
+  const stateSchemes = (msg.schemes || []).filter(s => s.state && s.state !== 'Central')
+  const hasSchemes = (msg.schemes || []).length > 0
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -146,11 +219,9 @@ function Message({ msg, langColor }) {
           🏛️
         </div>
       )}
-      <div className="max-w-[75%]">
+      <div className="max-w-[80%]">
         <div className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
-          isUser
-            ? 'text-white rounded-br-sm'
-            : 'text-gray-100 rounded-bl-sm'
+          isUser ? 'text-white rounded-br-sm' : 'text-gray-100 rounded-bl-sm'
         }`}
           style={{
             background: isUser
@@ -161,15 +232,34 @@ function Message({ msg, langColor }) {
           {msg.content}
         </div>
 
-        {/* Scheme cards below AI message */}
-        {!isUser && msg.schemes && msg.schemes.length > 0 && (
-          <div className="mt-3 space-y-2">
-            <p className="text-xs text-gray-500 px-1">
-              🎯 {msg.schemes.length} scheme{msg.schemes.length > 1 ? 's' : ''} found
+        {/* Scheme sections below AI message */}
+        {!isUser && hasSchemes && (
+          <div className="mt-2">
+            <p className="text-xs text-gray-500 px-1 mb-1">
+              🎯 {msg.schemes.length} matching scheme{msg.schemes.length > 1 ? 's' : ''} found
             </p>
-            {msg.schemes.map((s, i) => (
-              <SchemeCard key={i} scheme={s} index={i} />
-            ))}
+
+            {/* Central Schemes */}
+            {centralSchemes.length > 0 && (
+              <SchemeSection
+                title="Central Government Schemes"
+                icon="🏛️"
+                schemes={centralSchemes}
+                color="#FFAA00"
+                isState={false}
+              />
+            )}
+
+            {/* State Specific Schemes */}
+            {stateSchemes.length > 0 && (
+              <SchemeSection
+                title={`${stateSchemes[0].state} State Schemes`}
+                icon="🗺️"
+                schemes={stateSchemes}
+                color="#00D68F"
+                isState={true}
+              />
+            )}
           </div>
         )}
       </div>
@@ -185,6 +275,7 @@ export default function ChatPage() {
   const [recording, setRecording] = useState(false)
   const [selectedLang, setSelectedLang] = useState(() => localStorage.getItem('schemeai_lang_name') || 'Tamil')
   const [sessionId, setSessionId] = useState(null)
+  const [userState, setUserState] = useState(null)
   const [messages, setMessages] = useState([
     { id: 'init', role: 'ai', content: 'Hello! Tell me your name, age, occupation and state — I\'ll find the best government schemes for you.', schemes: [] }
   ])
@@ -214,6 +305,10 @@ export default function ChatPage() {
         sessionId,
       })
       setSessionId(data.sessionId)
+
+      // Track user state for section label
+      if (data.userProfile?.state) setUserState(data.userProfile.state)
+
       const aiMsg = {
         id: Date.now() + 1,
         role: 'ai',
@@ -259,6 +354,7 @@ export default function ChatPage() {
   const newChat = () => {
     setMessages([{ id: 'init', role: 'ai', content: 'Hello! Tell me your name, age, occupation and state.', schemes: [] }])
     setSessionId(null)
+    setUserState(null)
   }
 
   return (
@@ -304,7 +400,6 @@ export default function ChatPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Language selector */}
           <div className="relative">
             <button onClick={() => setShowLangPicker(v => !v)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all"
@@ -345,7 +440,6 @@ export default function ChatPage() {
             + New Chat
           </motion.button>
 
-          {/* Recent chats */}
           <div className="flex-1 overflow-y-auto space-y-1">
             <p className="text-[10px] text-gray-600 uppercase tracking-widest px-2 mb-2">Recent</p>
             <div className="px-2 py-2 rounded-xl cursor-pointer"
@@ -355,7 +449,6 @@ export default function ChatPage() {
             </div>
           </div>
 
-          {/* Suggested prompts */}
           <div>
             <p className="text-[10px] text-gray-600 uppercase tracking-widest px-1 mb-2">Try saying</p>
             {[
@@ -374,10 +467,9 @@ export default function ChatPage() {
 
         {/* Chat area */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Messages */}
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
             {messages.map(msg => (
-              <Message key={msg.id} msg={msg} langColor={L.color} />
+              <Message key={msg.id} msg={msg} langColor={L.color} userState={userState} />
             ))}
 
             {loading && (
@@ -404,7 +496,6 @@ export default function ChatPage() {
           <div className="flex-shrink-0 p-4"
             style={{ borderTop: '1px solid rgba(255,255,255,0.06)', background: 'rgba(8,13,26,0.8)' }}>
             <div className="flex items-center gap-3 max-w-4xl mx-auto">
-              {/* Voice button */}
               <motion.button whileTap={{ scale: 0.92 }} onClick={handleVoice}
                 className="w-11 h-11 rounded-full flex items-center justify-center text-xl flex-shrink-0 transition-all"
                 style={{
@@ -419,7 +510,6 @@ export default function ChatPage() {
                 }
               </motion.button>
 
-              {/* Text input */}
               <div className="flex-1 flex items-center rounded-2xl overflow-hidden"
                 style={{ background: 'rgba(255,255,255,0.06)', border: `1px solid ${input ? L.color + '40' : 'rgba(255,255,255,0.1)'}` }}>
                 <input
@@ -436,7 +526,6 @@ export default function ChatPage() {
                 )}
               </div>
 
-              {/* Send button */}
               <motion.button whileTap={{ scale: 0.92 }}
                 onClick={() => sendMessage(input)}
                 disabled={!input.trim() || loading}
