@@ -125,7 +125,7 @@ function SchemeCard({ scheme, index, isState = false }) {
           <a href={scheme.applyLink} target="_blank" rel="noreferrer"
             className="flex-1 flex items-center justify-center py-2 rounded-xl text-xs font-bold border transition-all"
             style={{ borderColor: `${cat.color}40`, color: cat.color, background: `${cat.color}10` }}>
-            🌐 Apply Online 🌐
+            🌐 Apply Online 
           </a>
         )}
         {scheme.applyLink && (
