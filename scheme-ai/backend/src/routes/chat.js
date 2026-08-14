@@ -10,13 +10,43 @@ import { logger } from '../utils/logger.js'
 const router = express.Router()
 
 const FALLBACK_REPLIES = {
-  Tamil:   (n, name) => `${name ? name + 'க்கு வணக்கம்! ' : 'வணக்கம்! '}உங்களுக்கு ${n} திட்டம் கண்டறியப்பட்டது. கீழே உள்ள திட்டங்களை பாருங்கள்.`,
-  Hindi:   (n, name) => `${name ? name + ' जी, नमस्ते! ' : 'नमस्ते! '}आपके लिए ${n} योजनाएँ मिली हैं। नीचे देखें।`,
+  Tamil:   (n, name) => `${name ? name + 'க்கு வணக்கம்! ' : 'வணக்கம்! '}உங்களுக்கு ${n} திட்டம் கண்டறியப்பட்டது.`,
+  Hindi:   (n, name) => `${name ? name + ' जी, नमस्ते! ' : 'नमस्ते! '}आपके लिए ${n} योजनाएँ मिली हैं।`,
   Telugu:  (n, name) => `${name ? name + ' గారికి నమస్కారం! ' : 'నమస్కారం! '}మీకు ${n} పథకాలు దొరికాయి.`,
   Kannada: (n, name) => `${name ? name + ' ಅವರಿಗೆ ನಮಸ್ಕಾರ! ' : 'ನಮಸ್ಕಾರ! '}ನಿಮಗೆ ${n} ಯೋಜನೆಗಳು ಸಿಕ್ಕಿವೆ.`,
   Bengali: (n, name) => `${name ? name + ', নমস্কার! ' : 'নমস্কার! '}আপনার জন্য ${n}টি প্রকল্প পাওয়া গেছে।`,
   Marathi: (n, name) => `${name ? name + ', नमस्कार! ' : 'नमस्कार! '}तुमच्यासाठी ${n} योजना सापडल्या.`,
-  English: (n, name) => `${name ? 'Hello ' + name + '! ' : 'Hello! '}I found ${n} scheme${n > 1 ? 's' : ''} for you. Please check below.`,
+  English: (n, name) => `${name ? 'Hello ' + name + '! ' : 'Hello! '}I found ${n} scheme${n > 1 ? 's' : ''} for you.`,
+}
+
+// ── Fetch state-specific schemes directly ─────────────────────
+async function fetchStateSchemes(state, profile, limit = 3) {
+  if (!state) return []
+  try {
+    const stateSchemes = await Scheme.find({
+      isActive: true,
+      state: state,
+    }).lean()
+
+    if (!stateSchemes.length) return []
+
+    // Score them by profile
+    const scored = matchSchemesByProfile(stateSchemes, profile, '')
+    return scored.slice(0, limit).map(s => ({
+      name: s.name || 'Unknown Scheme',
+      ministry: s.ministry || `Government of ${state}`,
+      benefit: s.benefit || 'Check official portal',
+      category: s.category || 'Other',
+      state: s.state,
+      eligibility: Math.min(Math.max(s.matchScore || 70, 60), 95),
+      reason: s.reason || `${state} state scheme — check eligibility`,
+      applyLink: s.applyLink || '',
+      eligibilityCriteria: Array.isArray(s.eligibilityCriteria) ? s.eligibilityCriteria : [],
+    }))
+  } catch (err) {
+    logger.warn(`State scheme fetch error: ${err.message}`)
+    return []
+  }
 }
 
 router.post('/message', async (req, res) => {
@@ -30,24 +60,20 @@ router.post('/message', async (req, res) => {
     let session = await Session.findOne({ sessionId: sid })
     if (!session) session = new Session({ sessionId: sid, language })
 
-    // Always extract with keywords first (instant, no API)
+    // Extract profile from message
     const keywordProfile = extractProfileFromText(message)
-
-    // Try Groq for better extraction
     let groqProfile = {}
-    try { groqProfile = await extractProfile(message) } catch { /* use keyword profile */ }
+    try { groqProfile = await extractProfile(message) } catch { }
 
-    // Merge: Groq wins over keywords, keywords fill gaps
     const newProfile = { ...keywordProfile }
     for (const [k, v] of Object.entries(groqProfile)) {
       if (v !== null && v !== undefined) newProfile[k] = v
     }
 
-    // Merge with session history (accumulate profile across messages)
+    // Merge with session history
     const mergedProfile = { ...(session.userProfile || {}) }
     for (const [k, v] of Object.entries(newProfile)) {
       if (v !== null && v !== undefined) {
-        // FIX: deduplicate need_category instead of pushing duplicates
         if (k === 'need_category' && Array.isArray(v)) {
           const existing = mergedProfile.need_category || []
           mergedProfile.need_category = [...new Set([...existing, ...v])]
@@ -60,59 +86,59 @@ router.post('/message', async (req, res) => {
 
     logger.info(`Profile: age=${mergedProfile.age}, gender=${mergedProfile.gender}, occ=${mergedProfile.occupation}, state=${mergedProfile.state}, caste=${mergedProfile.caste}`)
 
-    // Get schemes from RAG or DB
+    // ── Step 1: Get Central schemes from RAG ──────────────────
     let ragSchemes = []
     try { ragSchemes = await semanticSearch(message, mergedProfile, 10) } catch { }
     if (!ragSchemes.length) {
       try { ragSchemes = await mongoTextSearch(message, mergedProfile, 10) } catch { }
     }
 
-    // FIX: map eligibilityCriteria (DB field) correctly — don't use 'eligibility' from DB
     const schemesForScoring = ragSchemes.length > 0
       ? ragSchemes.map(r => ({ ...(r.metadata || {}), ...r }))
-      : await Scheme.find({ isActive: true }).lean()
+      : await Scheme.find({ isActive: true, state: 'Central' }).lean()
 
-    // Keyword scoring pass — matchSchemesByProfile uses 'eligibilityCriteria' now
-    let topSchemes = matchSchemesByProfile(schemesForScoring, mergedProfile, message).slice(0, 3)
+    // Score central schemes
+    let centralSchemes = matchSchemesByProfile(schemesForScoring, mergedProfile, message).slice(0, 3)
 
-    // FIX: Groq scoring — keep score as separate numeric field, don't overwrite eligibilityCriteria
+    // Groq scoring for central schemes
     try {
       const enhanced = await Promise.all(
-        topSchemes.map(async (s) => {
+        centralSchemes.map(async (s) => {
           try {
             const scored = await scoreEligibility(mergedProfile, {
               name: s.name,
               description: s.description || '',
-              // FIX: pass eligibilityCriteria (string array) to Groq for context
-              eligibility: Array.isArray(s.eligibilityCriteria)
-                ? s.eligibilityCriteria
-                : [],
+              eligibility: Array.isArray(s.eligibilityCriteria) ? s.eligibilityCriteria : [],
             })
             return {
               ...s,
-              // FIX: store numeric score in 'matchScore', never overwrite 'eligibilityCriteria'
               matchScore: Math.max(scored.score || 0, s.matchScore || 0),
               reason: scored.reason || s.reason,
             }
           } catch { return s }
         })
       )
-      topSchemes = enhanced.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0))
+      centralSchemes = enhanced.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0))
     } catch { }
 
-    // FIX: final shape uses 'matchScore' for the percentage shown in UI
-    topSchemes = topSchemes.slice(0, 3).map(s => ({
+    // Format central schemes
+    centralSchemes = centralSchemes.slice(0, 3).map(s => ({
       name: s.name || 'Unknown Scheme',
       ministry: s.ministry || 'Government of India',
       benefit: s.benefit || 'Check official portal',
-      category: s.category || 'General',
-      // FIX: matchScore is always a clean number now
+      category: s.category || 'Other',
+      state: 'Central',
       eligibility: Math.min(Math.max(s.matchScore || 45, 40), 95),
       reason: s.reason || 'May be eligible — verify at official portal',
       applyLink: s.applyLink || '',
-      // send eligibilityCriteria separately so UI can show criteria text
       eligibilityCriteria: Array.isArray(s.eligibilityCriteria) ? s.eligibilityCriteria : [],
     }))
+
+    // ── Step 2: Get State-specific schemes directly ────────────
+    const stateSchemes = await fetchStateSchemes(mergedProfile.state, mergedProfile, 3)
+
+    // ── Step 3: Combine Central + State schemes ────────────────
+    const topSchemes = [...centralSchemes, ...stateSchemes]
 
     // Generate reply
     let reply = ''
@@ -134,7 +160,7 @@ router.post('/message', async (req, res) => {
     session.updatedAt = new Date()
     await session.save()
 
-    logger.info(`Chat [${sid.slice(0, 8)}]: "${message.slice(0, 40)}..." → ${topSchemes.length} schemes`)
+    logger.info(`Chat [${sid.slice(0, 8)}]: "${message.slice(0, 40)}..." → ${topSchemes.length} schemes (${centralSchemes.length} central + ${stateSchemes.length} state)`)
     res.json({ reply, schemes: topSchemes, sessionId: sid, userProfile: mergedProfile })
 
   } catch (err) {
