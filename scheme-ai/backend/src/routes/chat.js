@@ -138,8 +138,15 @@ router.post('/message', async (req, res) => {
     const stateSchemes = await fetchStateSchemes(mergedProfile.state, mergedProfile, 3)
 
     // ── Step 3: Combine Central + State schemes ────────────────
-    const topSchemes = [...centralSchemes, ...stateSchemes]
-
+    // Deduplicate by name
+    const seenNames = new Set()
+    const topSchemes = [...centralSchemes, ...stateSchemes].filter(s => {
+      const key = s.name.toLowerCase().trim()
+      if (seenNames.has(key)) return false
+      seenNames.add(key)
+      return true
+    })
+    
     // Generate reply
     let reply = ''
     try {
