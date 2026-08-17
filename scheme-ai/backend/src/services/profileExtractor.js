@@ -267,5 +267,5 @@ export function matchSchemesByProfile(schemes, profile, userText) {
 
   return scored
     .sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0))
-    .slice(0, )
+    .slice(0, 6)
 }
