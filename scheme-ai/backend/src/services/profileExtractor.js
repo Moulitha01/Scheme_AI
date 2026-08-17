@@ -1,5 +1,4 @@
 // backend/src/services/profileExtractor.js
-// Pure keyword matching — works 100% without any AI API
 
 export function extractProfileFromText(text) {
   const t = text.toLowerCase()
@@ -11,7 +10,7 @@ export function extractProfileFromText(text) {
     has_aadhaar: null, family_size: null, need_category: [],
   }
 
-  // ── Age ─────────────────────────────────────────────────────
+  // ── Age ──────────────────────────────────────────────────────
   const agePatterns = [
     /(\d+)\s*(?:year|yr|வயது|வயதாகி|साल|वर्ष|సంవత్సరాలు|ವರ್ಷ|বছর|वर्षांचा|વર્ષ|വർഷം)/i,
     /age[:\s]+(\d+)/i,
@@ -28,15 +27,16 @@ export function extractProfileFromText(text) {
   }
 
   // ── Gender ───────────────────────────────────────────────────
-  if (/\b(female|woman|lady|girl|she|her|மாணவி|பெண்|அம்மா|महिला|औरत|స్త్రీ|ಮಹಿಳೆ|মহিলা|महिला|સ્ત્રી|സ്ത്രീ)\b/i.test(t))
+  if (/\b(female|woman|lady|girl|she|her|மாணவி|பெண்|அம்மா|महिला|औरत|స్త్రీ|ಮಹಿಳೆ|মহিলা|महिला|સ્ત્રী|സ്ത്രീ)\b/i.test(t))
     profile.gender = 'female'
-  else if (/\b(male|man|boy|he|his|மாணவன்|ஆண்|पुरुष|పురుషుడు|ಪುರುಷ|পুরুষ|पुरुष|પુરુષ|പുരുഷൻ)\b/i.test(t))
+  else if (/\b(male|man|boy|he|his|மாணவன்|ஆண்|पुरुष|పురుషుడు|ಪುರುಷ|পুরুষ|पुरुष|પુરుષ|പുരുഷൻ)\b/i.test(t))
     profile.gender = 'male'
 
   // ── State ────────────────────────────────────────────────────
   const STATES = {
-    'tamil nadu': 'Tamil Nadu', 'tamilnadu': 'Tamil Nadu', 'தமிழ்நாடு': 'Tamil Nadu',
-    'kerala': 'Kerala', 'karnataka': 'Karnataka', 'andhra pradesh': 'Andhra Pradesh', 'andhra': 'Andhra Pradesh',
+    'tamil nadu': 'Tamil Nadu', 'tamilnadu': 'Tamil Nadu', 'தமிழ்நாடு': 'Tamil Nadu', 'tamilnadu': 'Tamil Nadu',
+    'kerala': 'Kerala', 'karnataka': 'Karnataka',
+    'andhra pradesh': 'Andhra Pradesh', 'andhra': 'Andhra Pradesh',
     'telangana': 'Telangana', 'maharashtra': 'Maharashtra', 'gujarat': 'Gujarat',
     'rajasthan': 'Rajasthan', 'uttar pradesh': 'Uttar Pradesh', 'up': 'Uttar Pradesh',
     'bihar': 'Bihar', 'west bengal': 'West Bengal', 'bengal': 'West Bengal',
@@ -45,6 +45,9 @@ export function extractProfileFromText(text) {
     'jharkhand': 'Jharkhand', 'uttarakhand': 'Uttarakhand', 'himachal pradesh': 'Himachal Pradesh',
     'delhi': 'Delhi', 'goa': 'Goa', 'chhattisgarh': 'Chhattisgarh',
     'manipur': 'Manipur', 'meghalaya': 'Meghalaya', 'tripura': 'Tripura',
+    'nagaland': 'Nagaland', 'mizoram': 'Mizoram', 'sikkim': 'Sikkim',
+    'arunachal': 'Arunachal Pradesh', 'jammu': 'Jammu & Kashmir',
+    'puducherry': 'Puducherry', 'pondicherry': 'Puducherry',
   }
   for (const [key, val] of Object.entries(STATES)) {
     if (t.includes(key)) { profile.state = val; break }
@@ -71,7 +74,7 @@ export function extractProfileFromText(text) {
   if (/\b(disabled|disability|divyang|handicap|ஊனமுற்றோர்|विकलांग)\b/i.test(t)) profile.is_disabled = true
   if (/\b(widow|widower|கைம்பெண்|विधवा|పెళ్ళాన్ని పోగొట్టుకున్న)\b/i.test(t)) profile.is_widow = true
 
-  // ── Need categories (deduped at source) ──────────────────────
+  // ── Need categories ───────────────────────────────────────────
   const cats = new Set()
   if (/\b(health|hospital|medical|doctor|sick|disease|ஆரோக்கியம்|स्वास्थ्य|आरोग्य)\b/i.test(t)) cats.add('health')
   if (/\b(education|school|study|scholarship|padippu|படிப்பு|शिक्षा|scholarships)\b/i.test(t)) cats.add('education')
@@ -85,114 +88,178 @@ export function extractProfileFromText(text) {
   return profile
 }
 
+// ── Generate specific reason based on profile + scheme ────────
+function generateReason(scheme, profile, nameDesc) {
+  const parts = []
+
+  // Age-specific reason
+  if (profile.age) {
+    if (profile.age >= 60 && /pension|elderly|senior|old age/i.test(nameDesc))
+      parts.push(`Senior citizen aged ${profile.age} qualifies for this pension`)
+    else if (profile.age <= 25 && /scholarship|student|youth/i.test(nameDesc))
+      parts.push(`Eligible at age ${profile.age} for student scholarship`)
+    else if (profile.age >= 18 && profile.age <= 40 && /pension|apy/i.test(nameDesc))
+      parts.push(`Age ${profile.age} is within the 18-40 year eligibility window`)
+  }
+
+  // Gender-specific reason
+  if (profile.gender === 'female') {
+    if (/women|woman|mahila|girl|beti|maternity/i.test(nameDesc))
+      parts.push('Specifically designed for women')
+    else if (/scholarship/i.test(nameDesc))
+      parts.push('Female student scholarship available')
+  }
+
+  // Occupation-specific reason
+  if (profile.occupation === 'farmer' && /kisan|farmer|agri|crop/i.test(nameDesc))
+    parts.push('Directly targeted at farmers like you')
+  if (profile.occupation === 'student' && /scholarship|education|student/i.test(nameDesc))
+    parts.push('Student scholarship — matches your education status')
+  if (profile.occupation === 'unemployed' && /employment|rozgar|skill|training/i.test(nameDesc))
+    parts.push('Employment/training scheme for unemployed youth')
+  if (profile.occupation === 'daily_wage' && /labour|worker|mgnrega/i.test(nameDesc))
+    parts.push('Labour welfare scheme for daily wage workers')
+  if (profile.occupation === 'business' && /mudra|loan|enterprise/i.test(nameDesc))
+    parts.push('Business loan scheme for entrepreneurs')
+
+  // Caste-specific reason
+  if (profile.caste === 'sc' && /sc|dalit|scheduled caste/i.test(nameDesc))
+    parts.push('SC category scholarship — priority eligibility')
+  if (profile.caste === 'st' && /st|tribal|scheduled tribe/i.test(nameDesc))
+    parts.push('ST category scheme — priority eligibility')
+  if (profile.caste === 'obc' && /obc|backward/i.test(nameDesc))
+    parts.push('OBC category — additional benefits available')
+
+  // Need category reason
+  if (profile.need_category?.includes('housing') && /awas|housing|shelter/i.test(nameDesc))
+    parts.push('Housing assistance matches your need')
+  if (profile.need_category?.includes('health') && /health|hospital|medical/i.test(nameDesc))
+    parts.push('Health coverage matches your need')
+  if (profile.need_category?.includes('women_child') && /lpg|gas|ujjwala/i.test(nameDesc))
+    parts.push('Free LPG scheme for women without gas connection')
+  if (profile.need_category?.includes('finance') && /loan|mudra|credit/i.test(nameDesc))
+    parts.push('Financial assistance matches your need')
+
+  // Special conditions
+  if (profile.is_disabled && /divyang|disabled|handicap/i.test(nameDesc))
+    parts.push('Disability support scheme — you qualify')
+  if (profile.is_widow && /widow|vidhwa/i.test(nameDesc))
+    parts.push('Widow welfare scheme — you are eligible')
+
+  // State-specific reason
+  if (profile.state && scheme.state === profile.state)
+    parts.push(`${profile.state} state scheme — residents get priority`)
+
+  return parts[0] || 'Profile matches basic eligibility criteria'
+}
+
 // ── Smart scheme scoring ──────────────────────────────────────
-// FIX: uses 'eligibilityCriteria' (string[]) for text matching,
-// stores numeric score in 'matchScore' — never overwrites criteria array
 export function matchSchemesByProfile(schemes, profile, userText) {
   const t = (userText || '').toLowerCase()
 
   const scored = schemes.map(scheme => {
     let score = 45
-    const reasons = []
     const nameDesc = ((scheme.name || '') + ' ' + (scheme.description || '')).toLowerCase()
-
-    // FIX: use eligibilityCriteria for text matching, not eligibility
     const eligText = Array.isArray(scheme.eligibilityCriteria)
       ? scheme.eligibilityCriteria.join(' ').toLowerCase()
       : ''
 
-    // ── Age-based scoring ──────────────────────────────────────
+    // ── Age scoring ───────────────────────────────────────────
     if (profile.age) {
       const age = profile.age
       if (age >= 60) {
-        if (/pension|elderly|senior|vaya|old age|pmvvy/i.test(nameDesc)) { score += 35; reasons.push('Senior citizen scheme') }
-        if (/ayushman|health|hospital|pmjay/i.test(nameDesc)) { score += 20; reasons.push('Health coverage for seniors') }
-        if (/atal pension|apy/i.test(nameDesc)) { score += 15 }
+        if (/pension|elderly|senior|vaya|old age|pmvvy/i.test(nameDesc)) score += 35
+        if (/ayushman|health|hospital|pmjay/i.test(nameDesc)) score += 20
+        if (/atal pension|apy/i.test(nameDesc)) score += 15
       }
       if (age <= 25) {
-        if (/scholarship|student|youth|education|nsp/i.test(nameDesc)) { score += 35; reasons.push('Youth education scheme') }
-        if (/skill|pmkvy|training|kaushal/i.test(nameDesc)) { score += 25; reasons.push('Skill development') }
-        if (/employment|rozgar|job/i.test(nameDesc)) { score += 15 }
+        if (/scholarship|student|youth|education|nsp|girl|pragati/i.test(nameDesc)) score += 35
+        if (/skill|pmkvy|training|kaushal/i.test(nameDesc)) score += 25
+        if (/employment|rozgar|job/i.test(nameDesc)) score += 15
       }
       if (age >= 18 && age <= 40) {
-        if (/atal pension|apy/i.test(nameDesc)) { score += 25; reasons.push('Eligible for APY pension') }
-        if (/mudra|loan|pmegp/i.test(nameDesc)) { score += 15 }
-        if (/mgnrega|employment/i.test(nameDesc)) { score += 10 }
+        if (/atal pension|apy/i.test(nameDesc)) score += 25
+        if (/mudra|loan|pmegp/i.test(nameDesc)) score += 15
+        if (/mgnrega|employment/i.test(nameDesc)) score += 10
       }
-      if (/ayushman|pmjay/i.test(nameDesc)) { score += 15; reasons.push('Universal health coverage') }
+      if (/ayushman|pmjay/i.test(nameDesc)) score += 15
     }
 
-    // ── Occupation-based scoring ───────────────────────────────
+    // ── Occupation scoring ────────────────────────────────────
     if (profile.occupation === 'farmer') {
-      if (/kisan|farmer|agri|crop|fasal|pmfby|pm.kisan/i.test(nameDesc)) { score += 35; reasons.push('Farmer-specific scheme') }
-      if (/mgnrega|employment/i.test(nameDesc)) { score += 20 }
-      if (/mudra|loan/i.test(nameDesc)) { score += 10 }
+      if (/kisan|farmer|agri|crop|fasal|pmfby|pm.kisan|rythu|karshaka/i.test(nameDesc)) score += 35
+      if (/mgnrega|employment/i.test(nameDesc)) score += 20
+      if (/mudra|loan/i.test(nameDesc)) score += 10
     }
     if (profile.occupation === 'student') {
-      if (/scholarship|student|education|nsp|padho/i.test(nameDesc)) { score += 40; reasons.push('Student scholarship') }
-      if (/skill|pmkvy|training/i.test(nameDesc)) { score += 25; reasons.push('Skill training for students') }
+      if (/scholarship|student|education|nsp|padho|vidya|girl|pragati|merit/i.test(nameDesc)) score += 40
+      if (/skill|pmkvy|training/i.test(nameDesc)) score += 25
+      if (/hostel|accommodation/i.test(nameDesc)) score += 20
     }
     if (profile.occupation === 'unemployed') {
-      if (/mgnrega|employment|rozgar|job guarantee/i.test(nameDesc)) { score += 35; reasons.push('Employment guarantee') }
-      if (/skill|pmkvy|training|kaushal|ddu/i.test(nameDesc)) { score += 30; reasons.push('Skill training available') }
-      if (/mudra|loan|pmegp/i.test(nameDesc)) { score += 15 }
+      if (/mgnrega|employment|rozgar|job guarantee/i.test(nameDesc)) score += 35
+      if (/skill|pmkvy|training|kaushal|ddu/i.test(nameDesc)) score += 30
+      if (/mudra|loan|pmegp/i.test(nameDesc)) score += 15
     }
     if (profile.occupation === 'daily_wage') {
-      if (/mgnrega|employment|labour|worker/i.test(nameDesc)) { score += 35; reasons.push('Labour welfare scheme') }
-      if (/ayushman|health/i.test(nameDesc)) { score += 20 }
-      if (/awas|housing|pmay/i.test(nameDesc)) { score += 15 }
-      if (/atal pension|apy/i.test(nameDesc)) { score += 20; reasons.push('Pension for workers') }
+      if (/mgnrega|employment|labour|worker/i.test(nameDesc)) score += 35
+      if (/ayushman|health/i.test(nameDesc)) score += 20
+      if (/awas|housing|pmay/i.test(nameDesc)) score += 15
+      if (/atal pension|apy/i.test(nameDesc)) score += 20
     }
     if (profile.occupation === 'business') {
-      if (/mudra|pmegp|startup|enterprise|stand.?up/i.test(nameDesc)) { score += 40; reasons.push('Business loan scheme') }
-      if (/skill|training/i.test(nameDesc)) { score += 10 }
+      if (/mudra|pmegp|startup|enterprise|stand.?up|loan/i.test(nameDesc)) score += 40
+      if (/skill|training/i.test(nameDesc)) score += 10
     }
 
-    // ── Gender-based scoring ───────────────────────────────────
+    // ── Gender scoring ────────────────────────────────────────
     if (profile.gender === 'female') {
-      if (/women|woman|mahila|beti|ujjwala|sukanya|girl|maternity|janani/i.test(nameDesc)) {
-        score += 30; reasons.push('Women welfare scheme')
-      }
-      if (/scholarship|education/i.test(nameDesc)) { score += 15 }
+      if (/women|woman|mahila|beti|ujjwala|sukanya|girl|maternity|janani|lakshmi|ladki|amma/i.test(nameDesc)) score += 30
+      if (/scholarship|education/i.test(nameDesc)) score += 15
     }
 
-    // ── Caste-based scoring ────────────────────────────────────
+    // ── Caste scoring ─────────────────────────────────────────
     if (profile.caste === 'sc' || profile.caste === 'st') {
-      if (/sc|st|dalit|tribal|scheduled|adivasi/i.test(nameDesc + eligText)) { score += 20; reasons.push('SC/ST priority scheme') }
-      if (/scholarship|education/i.test(nameDesc)) { score += 15 }
+      if (/sc|st|dalit|tribal|scheduled|adivasi/i.test(nameDesc + eligText)) score += 20
+      if (/scholarship|education/i.test(nameDesc)) score += 15
     }
     if (profile.caste === 'obc') {
-      if (/obc|backward|scholarship/i.test(nameDesc + eligText)) { score += 15; reasons.push('OBC scheme') }
+      if (/obc|backward|scholarship/i.test(nameDesc + eligText)) score += 15
     }
 
-    // ── Need category scoring ──────────────────────────────────
+    // ── Need category scoring ─────────────────────────────────
     if (profile.need_category?.includes('health') && /ayushman|pmjay|health|hospital|janani|nhm/i.test(nameDesc)) score += 25
-    if (profile.need_category?.includes('housing') && /awas|housing|pmay|shelter/i.test(nameDesc)) { score += 25; reasons.push('Housing assistance') }
-    if (profile.need_category?.includes('education') && /scholarship|nsp|education|student/i.test(nameDesc)) score += 25
-    if (profile.need_category?.includes('women_child') && /ujjwala|gas|lpg|women|sukanya/i.test(nameDesc)) { score += 25; reasons.push('LPG/Women scheme') }
+    if (profile.need_category?.includes('housing') && /awas|housing|pmay|shelter|gharkul|griha/i.test(nameDesc)) score += 25
+    if (profile.need_category?.includes('education') && /scholarship|nsp|education|student|vidya/i.test(nameDesc)) score += 25
+    if (profile.need_category?.includes('women_child') && /ujjwala|gas|lpg|women|sukanya|mahila/i.test(nameDesc)) score += 25
     if (profile.need_category?.includes('finance') && /mudra|loan|credit|pmegp/i.test(nameDesc)) score += 25
-    if (profile.need_category?.includes('agriculture') && /kisan|crop|farmer|fasal|pmfby/i.test(nameDesc)) score += 25
+    if (profile.need_category?.includes('agriculture') && /kisan|crop|farmer|fasal|pmfby|rythu/i.test(nameDesc)) score += 25
 
-    // ── Special conditions ─────────────────────────────────────
+    // ── Special conditions ────────────────────────────────────
     if (profile.is_disabled && /divyang|disabled|handicap/i.test(nameDesc)) score += 25
     if (profile.is_widow && /widow|vidhwa|mahila/i.test(nameDesc)) score += 20
 
-    // ── Keyword match bonus ────────────────────────────────────
+    // ── State bonus ───────────────────────────────────────────
+    if (profile.state && scheme.state === profile.state) score += 15
+
+    // ── Keyword match bonus ───────────────────────────────────
     const keywords = t.split(/\s+/).filter(w => w.length > 3)
     for (const kw of keywords) {
       if (nameDesc.includes(kw)) score += 5
     }
 
-    // ── Universal scheme floors ────────────────────────────────
+    // ── Universal floors ──────────────────────────────────────
     if (/ayushman|pmjay/i.test(nameDesc)) score = Math.max(score, 55)
     if (/atal pension|apy/i.test(nameDesc) && profile.age >= 18 && profile.age <= 40) score = Math.max(score, 60)
     if (/mgnrega/i.test(nameDesc)) score = Math.max(score, 52)
 
+    // ── Generate specific reason ──────────────────────────────
+    const reason = generateReason(scheme, profile, nameDesc)
+
     return {
       ...scheme,
-      // FIX: store as matchScore (number), never touch eligibilityCriteria (string[])
       matchScore: Math.min(score, 95),
-      reason: reasons[0] || 'May be eligible — check official portal',
+      reason,
       benefit: scheme.benefit || 'Check official portal',
       applyLink: scheme.applyLink || '',
     }

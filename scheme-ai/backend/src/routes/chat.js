@@ -19,18 +19,22 @@ const FALLBACK_REPLIES = {
   English: (n, name) => `${name ? 'Hello ' + name + '! ' : 'Hello! '}I found ${n} scheme${n > 1 ? 's' : ''} for you.`,
 }
 
+// ── Normalize scheme name for deduplication ───────────────────
+function normalizeName(name) {
+  return name
+    .toLowerCase()
+    .replace(/\s+(tn|tamilnadu|tamil nadu|ap|andhra|telangana|karnataka|kerala|maharashtra|gujarat|punjab|haryana|odisha|bihar|rajasthan|wb|up|mp|cg|jh|uk|hp|goa|delhi|assam)$/i, '')
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 // ── Fetch state-specific schemes directly ─────────────────────
 async function fetchStateSchemes(state, profile, limit = 3) {
   if (!state) return []
   try {
-    const stateSchemes = await Scheme.find({
-      isActive: true,
-      state: state,
-    }).lean()
-
+    const stateSchemes = await Scheme.find({ isActive: true, state }).lean()
     if (!stateSchemes.length) return []
-
-    // Score them by profile
     const scored = matchSchemesByProfile(stateSchemes, profile, '')
     return scored.slice(0, limit).map(s => ({
       name: s.name || 'Unknown Scheme',
@@ -51,7 +55,6 @@ async function fetchStateSchemes(state, profile, limit = 3) {
 
 router.post('/message', async (req, res) => {
   const { message, sessionId, language = 'English' } = req.body
-
   if (!message?.trim()) return res.status(400).json({ error: 'Message is required' })
 
   const sid = sessionId || uuidv4()
@@ -60,7 +63,7 @@ router.post('/message', async (req, res) => {
     let session = await Session.findOne({ sessionId: sid })
     if (!session) session = new Session({ sessionId: sid, language })
 
-    // Extract profile from message
+    // Extract profile
     const keywordProfile = extractProfileFromText(message)
     let groqProfile = {}
     try { groqProfile = await extractProfile(message) } catch { }
@@ -70,7 +73,6 @@ router.post('/message', async (req, res) => {
       if (v !== null && v !== undefined) newProfile[k] = v
     }
 
-    // Merge with session history
     const mergedProfile = { ...(session.userProfile || {}) }
     for (const [k, v] of Object.entries(newProfile)) {
       if (v !== null && v !== undefined) {
@@ -97,10 +99,9 @@ router.post('/message', async (req, res) => {
       ? ragSchemes.map(r => ({ ...(r.metadata || {}), ...r }))
       : await Scheme.find({ isActive: true, state: 'Central' }).lean()
 
-    // Score central schemes
     let centralSchemes = matchSchemesByProfile(schemesForScoring, mergedProfile, message).slice(0, 3)
 
-    // Groq scoring for central schemes
+    // Groq scoring
     try {
       const enhanced = await Promise.all(
         centralSchemes.map(async (s) => {
@@ -121,7 +122,6 @@ router.post('/message', async (req, res) => {
       centralSchemes = enhanced.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0))
     } catch { }
 
-    // Format central schemes
     centralSchemes = centralSchemes.slice(0, 3).map(s => ({
       name: s.name || 'Unknown Scheme',
       ministry: s.ministry || 'Government of India',
@@ -134,19 +134,25 @@ router.post('/message', async (req, res) => {
       eligibilityCriteria: Array.isArray(s.eligibilityCriteria) ? s.eligibilityCriteria : [],
     }))
 
-    // ── Step 2: Get State-specific schemes directly ────────────
+    // ── Step 2: Get State schemes ─────────────────────────────
     const stateSchemes = await fetchStateSchemes(mergedProfile.state, mergedProfile, 3)
 
-    // ── Step 3: Combine Central + State schemes ────────────────
-    // Deduplicate by name
-    const seenNames = new Set()
-    const topSchemes = [...centralSchemes, ...stateSchemes].filter(s => {
-      const key = s.name.toLowerCase().trim()
-      if (seenNames.has(key)) return false
-      seenNames.add(key)
+    // ── Step 3: Combine with smart deduplication ──────────────
+    // Use normalized name comparison to catch variants like "Scheme TN" vs "Scheme"
+    const seenNormalized = new Set()
+
+    const deduped = [...centralSchemes, ...stateSchemes].filter(s => {
+      const normalized = normalizeName(s.name)
+      // Check if any existing seen name is a substring or superset
+      for (const seen of seenNormalized) {
+        if (seen.includes(normalized) || normalized.includes(seen)) return false
+      }
+      seenNormalized.add(normalized)
       return true
     })
-    
+
+    const topSchemes = deduped
+
     // Generate reply
     let reply = ''
     try {
@@ -167,7 +173,9 @@ router.post('/message', async (req, res) => {
     session.updatedAt = new Date()
     await session.save()
 
-    logger.info(`Chat [${sid.slice(0, 8)}]: "${message.slice(0, 40)}..." → ${topSchemes.length} schemes (${centralSchemes.length} central + ${stateSchemes.length} state)`)
+    const centralCount = topSchemes.filter(s => s.state === 'Central').length
+    const stateCount = topSchemes.filter(s => s.state !== 'Central').length
+    logger.info(`Chat [${sid.slice(0, 8)}]: "${message.slice(0, 40)}..." → ${topSchemes.length} schemes (${centralCount} central + ${stateCount} state)`)
     res.json({ reply, schemes: topSchemes, sessionId: sid, userProfile: mergedProfile })
 
   } catch (err) {
