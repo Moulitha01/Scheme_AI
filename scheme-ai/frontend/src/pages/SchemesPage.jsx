@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { RiSearchLine, RiExternalLinkLine, RiCheckLine, RiFilterLine, RiCloseLine, RiHeartLine, RiHeartFill } from 'react-icons/ri'
 import toast from 'react-hot-toast'
-import { useSchemeStore } from '../store'
+import { useSchemeStore } from '../stores'
 
 const CATEGORIES = ['All', 'Agriculture', 'Education', 'Health', 'Housing', 'Women & Child', 'Finance', 'Employment']
 
