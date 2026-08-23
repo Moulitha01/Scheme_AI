@@ -74,7 +74,7 @@ export const STATE_SCHEMES = [
     applyLink: 'https://www.tnschools.gov.in', isActive: true,
   },
 
-  // ── KERALA ──────────────────────────────────────────────────
+  // ── Kerala ──────────────────────────────────────────────────
   {
     name: 'Karunya Health Scheme Kerala',
     ministry: 'Government of Kerala - Health',
