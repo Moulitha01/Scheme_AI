@@ -2,7 +2,7 @@
 // Complete India coverage — 28 states + 8 UTs
 
 export const STATE_SCHEMES = [
-  // ── TAMIL NADU ──────────────────────────────────────────────
+  // ── TAMIL nadu ──────────────────────────────────────────────
   {
     name: 'Kalaignar Magalir Urimai Thittam',
     ministry: 'Government of Tamil Nadu',
@@ -74,7 +74,7 @@ export const STATE_SCHEMES = [
     applyLink: 'https://www.tnschools.gov.in', isActive: true,
   },
 
-  // ── KERALA ──────────────────────────────────────────────────
+  // ── Kerala ──────────────────────────────────────────────────
   {
     name: 'Karunya Health Scheme Kerala',
     ministry: 'Government of Kerala - Health',
