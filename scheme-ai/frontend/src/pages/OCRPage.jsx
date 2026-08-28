@@ -3,7 +3,7 @@ import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 
-const API_BASE = 'http://localhost:5001'
+const API_BASE = 'http://localhost:5000'
 
 const STEPS = [
   { id: 'upload',  icon: '📄', label: 'Upload',   desc: 'Choose document' },
