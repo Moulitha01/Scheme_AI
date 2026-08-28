@@ -9,7 +9,7 @@ const STEPS = [
   { id: 'upload',  icon: '📄', label: 'Upload',   desc: 'Choose document' },
   { id: 'scan',    icon: '🔍', label: 'Scan',      desc: 'AI extracts data' },
   { id: 'review',  icon: '✍️', label: 'Review',   desc: 'Check details' },
-  { id: 'done',    icon: '✅', label: 'Done',      desc: 'Ready to apply' },,
+  { id: 'done',    icon: '✅', label: 'Done',      desc: 'Ready to apply' },
 ]
 
 const DOC_TYPES = [
