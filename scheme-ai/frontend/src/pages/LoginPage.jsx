@@ -1,341 +1,133 @@
+// frontend/src/pages/LoginPage.jsx
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
-import { RiUserLine, RiPhoneLine, RiArrowRightLine, RiGovernmentLine, RiShieldCheckLine } from 'react-icons/ri'
-import toast from 'react-hot-toast'
-import { useAuthStore } from '../store'
-
-const LANGUAGES = [
-  { code: 'en-IN', short: 'en', label: 'English', name: 'English', flag: '🇬🇧' },
-  { code: 'hi-IN', short: 'hi', label: 'हिन्दी', name: 'Hindi', flag: '🇮🇳' },
-  { code: 'ta-IN', short: 'ta', label: 'தமிழ்', name: 'Tamil', flag: '🇮🇳' },
-  { code: 'te-IN', short: 'te', label: 'తెలుగు', name: 'Telugu', flag: '🇮🇳' },
-  { code: 'bn-IN', short: 'bn', label: 'বাংলা', name: 'Bengali', flag: '🇮🇳' },
-  { code: 'mr-IN', short: 'mr', label: 'मराठी', name: 'Marathi', flag: '🇮🇳' },
-  { code: 'gu-IN', short: 'gu', label: 'ગુજરાતી', name: 'Gujarati', flag: '🇮🇳' },
-  { code: 'kn-IN', short: 'kn', label: 'ಕನ್ನಡ', name: 'Kannada', flag: '🇮🇳' },
-]
-const STATES = [
-  'Andhra Pradesh','Assam','Bihar','Chhattisgarh','Delhi','Gujarat',
-  'Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala',
-  'Madhya Pradesh','Maharashtra','Odisha','Punjab','Rajasthan',
-  'Tamil Nadu','Telangana','Uttar Pradesh','Uttarakhand','West Bengal',
-]
+import axios from 'axios'
 
 export default function LoginPage() {
-  const [tab, setTab] = useState('login')   // 'login' | 'register'
-  const [step, setStep] = useState(1)        // register: step 1 = basic, step 2 = profile
-  const [loading, setLoading] = useState(false)
-
-  // Login fields
-  const [phone, setPhone] = useState('')
-  const [name, setName] = useState('')
-
-  // Register step 2 fields
-  const [language, setLanguage] = useState('English')
-  const [state, setState] = useState('')
-  const [occupation, setOccupation] = useState('')
-
-  const login = useAuthStore(s => s.login)
   const navigate = useNavigate()
+  const [phone, setPhone] = useState('')
+  const [otp, setOtp] = useState('')
+  const [step, setStep] = useState('phone')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  // ── LOGIN ──
-  const handleLogin = async (e) => {
-    e.preventDefault()
-    if (!phone.trim()) return toast.error('Please enter your phone number')
-    setLoading(true)
-
+  const sendOTP = async () => {
+    if (phone.length < 10) { setError('Please enter a valid 10-digit mobile number'); return }
+    setLoading(true); setError('')
     try {
-      // Check localStorage for existing user by phone
-      const stored = localStorage.getItem(`scheme-ai-user-${phone}`)
-      if (stored) {
-        const userData = JSON.parse(stored)
-        login(userData)
-        toast.success(`Welcome back, ${userData.name}! 🙏`)
-        navigate('/chat')
-      } else {
-        toast.error('No account found. Please register first.')
-        setTab('register')
-      }
-    } catch {
-      toast.error('Something went wrong. Please try again.')
-    } finally {
-      setLoading(false)
-    }
+      await axios.post('/api/users/send-otp', { phone })
+      setStep('otp')
+    } catch { setError('Could not send OTP. Please try again.') }
+    finally { setLoading(false) }
   }
 
-  // ── REGISTER STEP 1 ──
-  const handleStep1 = (e) => {
-    e.preventDefault()
-    if (!name.trim()) return toast.error('Please enter your name')
-    if (!phone.trim() || phone.length < 10) return toast.error('Please enter a valid 10-digit phone number')
-    const exists = localStorage.getItem(`scheme-ai-user-${phone}`)
-    if (exists) {
-      toast.error('Account already exists. Please login.')
-      setTab('login')
-      return
-    }
-    setStep(2)
-  }
-
-  // ── REGISTER STEP 2 ──
-  const handleRegister = async (e) => {
-    e.preventDefault()
-    if (!language) return toast.error('Please select your preferred language')
-    setLoading(true)
-
+  const verifyOTP = async () => {
+    if (otp.length < 4) { setError('Please enter the OTP'); return }
+    setLoading(true); setError('')
     try {
-      const userData = {
-        id: crypto.randomUUID(),
-        name: name.trim(),
-        phone: phone.trim(),
-        language,
-        profile: { state, occupation },
-        createdAt: new Date().toISOString(),
-      }
-      // Save to localStorage by phone for lookup
-      localStorage.setItem(`scheme-ai-user-${phone}`, JSON.stringify(userData))
-      login(userData)
-      toast.success(`Welcome to Scheme-AI, ${name}! 🇮🇳`)
-      navigate('/chat')
-    } catch {
-      toast.error('Registration failed. Please try again.')
-    } finally {
-      setLoading(false)
-    }
+      await axios.post('/api/users/verify-otp', { phone, otp })
+      navigate('/dashboard')
+    } catch { setError('Invalid OTP. Please try again.') }
+    finally { setLoading(false) }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 pt-16 pb-8">
-      {/* Background */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute w-[400px] h-[400px] rounded-full bg-saffron/8 blur-[80px] -top-20 -left-20 animate-float" />
-        <div className="absolute w-[350px] h-[350px] rounded-full bg-scheme-green/6 blur-[80px] bottom-0 right-0" />
+    <div style={{ fontFamily: 'Inter, sans-serif', minHeight: '100vh', background: '#f8f9fc', display: 'flex', flexDirection: 'column' }}>
+      {/* Tricolor */}
+      <div style={{ height: 5, display: 'flex' }}>
+        <div style={{ flex: 1, background: '#FF6B00' }} />
+        <div style={{ flex: 1, background: '#fff', borderTop: '2px solid #eee' }} />
+        <div style={{ flex: 1, background: '#138808' }} />
       </div>
 
-      <div className="w-full max-w-md relative z-10">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -16 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-8"
-        >
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-saffron to-gold flex items-center justify-center text-3xl mx-auto mb-4 shadow-[0_8px_32px_rgba(255,107,0,0.3)]">
-            🇮🇳
-          </div>
-          <h1 className="text-2xl font-extrabold tracking-tight">
-            Scheme<span className="text-saffron">-AI</span>
-          </h1>
-          <p className="text-sm text-[#8A9BB0] mt-1">Welfare Eligibility Navigator</p>
-        </motion.div>
+      {/* Navbar */}
+      <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 5%', height: 60, background: '#fff', borderBottom: '1px solid #f0f0f0', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }} onClick={() => navigate('/')}>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, #FF6B00, #FFAA00)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🏛️</div>
+          <span style={{ fontWeight: 800, fontSize: 20 }}>Scheme<span style={{ color: '#FF6B00' }}>-AI</span></span>
+        </div>
+        <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', fontSize: 14, color: '#555', cursor: 'pointer' }}>← Back to Home</button>
+      </nav>
 
-        {/* Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="card p-7"
-        >
-          {/* Tabs */}
-          <div className="flex bg-navy rounded-xl p-1 mb-6">
-            {['login', 'register'].map(t => (
-              <button
-                key={t}
-                onClick={() => { setTab(t); setStep(1) }}
-                className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all duration-200 capitalize ${
-                  tab === t
-                    ? 'bg-saffron text-navy shadow'
-                    : 'text-[#8A9BB0] hover:text-white'
-                }`}
-              >
-                {t === 'login' ? '🔑 Login' : '✨ Register'}
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 5%' }}>
+        <div style={{ background: '#fff', border: '1px solid #e8e8e8', borderRadius: 24, padding: '40px 36px', maxWidth: 420, width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.08)' }}>
+
+          <div style={{ textAlign: 'center', marginBottom: 32 }}>
+            <div style={{ width: 64, height: 64, borderRadius: 16, background: 'linear-gradient(135deg, #FF6B00, #FFAA00)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, margin: '0 auto 16px' }}>🏛️</div>
+            <h1 style={{ fontSize: 24, fontWeight: 800, color: '#1a1a2e', margin: '0 0 6px' }}>Sign in to Scheme-AI</h1>
+            <p style={{ fontSize: 14, color: '#888', margin: 0 }}>No password needed — just your mobile number</p>
+          </div>
+
+          {error && (
+            <div style={{ background: '#fde8e8', border: '1px solid #f5b7b1', borderRadius: 10, padding: '12px 16px', marginBottom: 20, fontSize: 14, color: '#c0392b' }}>
+              ⚠️ {error}
+            </div>
+          )}
+
+          {step === 'phone' ? (
+            <>
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ fontSize: 14, fontWeight: 600, color: '#333', display: 'block', marginBottom: 8 }}>Mobile Number</label>
+                <div style={{ display: 'flex', border: '2px solid #e0e0e0', borderRadius: 12, overflow: 'hidden', transition: 'border 0.2s' }}>
+                  <span style={{ background: '#f8f8f8', padding: '14px 16px', fontSize: 15, color: '#555', borderRight: '1px solid #e0e0e0', fontWeight: 600 }}>🇮🇳 +91</span>
+                  <input
+                    type="tel" maxLength={10} value={phone}
+                    onChange={e => setPhone(e.target.value.replace(/\D/g, ''))}
+                    onKeyDown={e => e.key === 'Enter' && sendOTP()}
+                    placeholder="Enter 10-digit number"
+                    style={{ flex: 1, padding: '14px 16px', border: 'none', fontSize: 16, outline: 'none', color: '#1a1a2e' }}
+                  />
+                </div>
+              </div>
+              <button onClick={sendOTP} disabled={loading || phone.length < 10}
+                style={{
+                  width: '100%', background: phone.length >= 10 ? 'linear-gradient(135deg, #FF6B00, #FFAA00)' : '#e0e0e0',
+                  color: phone.length >= 10 ? '#fff' : '#aaa', border: 'none', borderRadius: 12,
+                  padding: '16px', fontSize: 16, fontWeight: 700, cursor: phone.length >= 10 ? 'pointer' : 'default',
+                }}>
+                {loading ? '⏳ Sending OTP...' : 'Send OTP →'}
               </button>
-            ))}
+            </>
+          ) : (
+            <>
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ fontSize: 14, fontWeight: 600, color: '#333', display: 'block', marginBottom: 8 }}>Enter OTP sent to +91 {phone}</label>
+                <input
+                  type="tel" maxLength={6} value={otp}
+                  onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
+                  onKeyDown={e => e.key === 'Enter' && verifyOTP()}
+                  placeholder="Enter OTP"
+                  style={{ width: '100%', padding: '16px', border: '2px solid #e0e0e0', borderRadius: 12, fontSize: 24, textAlign: 'center', letterSpacing: 8, fontWeight: 700, outline: 'none', boxSizing: 'border-box', color: '#1a1a2e' }}
+                />
+              </div>
+              <button onClick={verifyOTP} disabled={loading || otp.length < 4}
+                style={{
+                  width: '100%', background: otp.length >= 4 ? 'linear-gradient(135deg, #FF6B00, #FFAA00)' : '#e0e0e0',
+                  color: otp.length >= 4 ? '#fff' : '#aaa', border: 'none', borderRadius: 12,
+                  padding: '16px', fontSize: 16, fontWeight: 700, cursor: otp.length >= 4 ? 'pointer' : 'default', marginBottom: 12,
+                }}>
+                {loading ? '⏳ Verifying...' : 'Verify & Sign In ✓'}
+              </button>
+              <button onClick={() => { setStep('phone'); setOtp(''); setError('') }}
+                style={{ width: '100%', background: 'none', border: '1px solid #e0e0e0', borderRadius: 12, padding: '12px', fontSize: 14, color: '#555', cursor: 'pointer' }}>
+                ← Change number
+              </button>
+            </>
+          )}
+
+          <div style={{ textAlign: 'center', marginTop: 24 }}>
+            <button onClick={() => navigate('/chat')}
+              style={{ background: 'none', border: 'none', fontSize: 14, color: '#FF6B00', cursor: 'pointer', fontWeight: 600, textDecoration: 'underline' }}>
+              Skip — use without signing in →
+            </button>
           </div>
+        </div>
+      </div>
 
-          {/* ── LOGIN FORM ── */}
-          <AnimatePresence mode="wait">
-            {tab === 'login' && (
-              <motion.form
-                key="login"
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 10 }}
-                onSubmit={handleLogin}
-                className="space-y-4"
-              >
-                <div>
-                  <label className="text-xs font-semibold text-[#8A9BB0] uppercase tracking-wider mb-2 block">
-                    Phone Number
-                  </label>
-                  <div className="relative">
-                    <RiPhoneLine className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8A9BB0]" size={16} />
-                    <input
-                      type="tel"
-                      value={phone}
-                      onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                      placeholder="Enter your 10-digit mobile number"
-                      className="input-field pl-9"
-                      maxLength={10}
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="btn-primary w-full justify-center py-3.5 mt-2 text-sm"
-                >
-                  {loading ? '⌛ Logging in...' : <>Login to Scheme-AI <RiArrowRightLine /></>}
-                </button>
-
-                <p className="text-xs text-center text-[#8A9BB0]">
-                  Don't have an account?{' '}
-                  <button type="button" onClick={() => setTab('register')} className="text-saffron font-semibold hover:underline">
-                    Register here
-                  </button>
-                </p>
-              </motion.form>
-            )}
-
-            {/* ── REGISTER FORM ── */}
-            {tab === 'register' && (
-              <motion.div
-                key="register"
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-              >
-                {/* Step indicator */}
-                <div className="flex items-center gap-2 mb-5">
-                  {[1, 2].map(s => (
-                    <div key={s} className="flex items-center gap-2 flex-1">
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 transition-all ${
-                        step >= s ? 'bg-saffron text-navy' : 'bg-navy-border text-[#8A9BB0]'
-                      }`}>
-                        {step > s ? '✓' : s}
-                      </div>
-                      <div className={`text-xs font-medium ${step >= s ? 'text-white' : 'text-[#8A9BB0]'}`}>
-                        {s === 1 ? 'Basic Info' : 'Preferences'}
-                      </div>
-                      {s < 2 && <div className={`flex-1 h-px ${step > s ? 'bg-saffron' : 'bg-navy-border'}`} />}
-                    </div>
-                  ))}
-                </div>
-
-                <AnimatePresence mode="wait">
-                  {step === 1 && (
-                    <motion.form
-                      key="step1"
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -10 }}
-                      onSubmit={handleStep1}
-                      className="space-y-4"
-                    >
-                      <div>
-                        <label className="text-xs font-semibold text-[#8A9BB0] uppercase tracking-wider mb-2 block">Full Name</label>
-                        <div className="relative">
-                          <RiUserLine className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8A9BB0]" size={16} />
-                          <input
-                            type="text"
-                            value={name}
-                            onChange={e => setName(e.target.value)}
-                            placeholder="Enter your full name"
-                            className="input-field pl-9"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold text-[#8A9BB0] uppercase tracking-wider mb-2 block">Phone Number</label>
-                        <div className="relative">
-                          <RiPhoneLine className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8A9BB0]" size={16} />
-                          <input
-                            type="tel"
-                            value={phone}
-                            onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                            placeholder="10-digit mobile number"
-                            className="input-field pl-9"
-                            maxLength={10}
-                          />
-                        </div>
-                      </div>
-                      <button type="submit" className="btn-primary w-full justify-center py-3.5 text-sm">
-                        Continue <RiArrowRightLine />
-                      </button>
-                    </motion.form>
-                  )}
-
-                  {step === 2 && (
-                    <motion.form
-                      key="step2"
-                      initial={{ opacity: 0, x: 10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 10 }}
-                      onSubmit={handleRegister}
-                      className="space-y-4"
-                    >
-                      <div>
-                        <label className="text-xs font-semibold text-[#8A9BB0] uppercase tracking-wider mb-2 block">
-                          Preferred Language *
-                        </label>
-                        <select
-                          value={language}
-                          onChange={e => setLanguage(e.target.value)}
-                          className="input-field font-devanagari"
-                        >
-                          {LANGUAGES.map(l => (
-                            <option key={l.code} value={l.code}>{l.label}</option>
-                          ))}
-                        </select>
-                        <p className="text-[10px] text-[#8A9BB0] mt-1">AI will always respond in this language</p>
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold text-[#8A9BB0] uppercase tracking-wider mb-2 block">
-                          Your State (Optional)
-                        </label>
-                        <select value={state} onChange={e => setState(e.target.value)} className="input-field">
-                          <option value="">Select your state</option>
-                          {STATES.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold text-[#8A9BB0] uppercase tracking-wider mb-2 block">
-                          Occupation (Optional)
-                        </label>
-                        <select value={occupation} onChange={e => setOccupation(e.target.value)} className="input-field">
-                          <option value="">Select occupation</option>
-                          {['Farmer','Student','Daily Wage Worker','Unemployed','Small Business Owner','Government Employee','Other'].map(o => (
-                            <option key={o} value={o}>{o}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="flex gap-3 pt-1">
-                        <button type="button" onClick={() => setStep(1)} className="btn-secondary flex-1 justify-center py-3 text-sm">
-                          ← Back
-                        </button>
-                        <button type="submit" disabled={loading} className="btn-primary flex-1 justify-center py-3 text-sm">
-                          {loading ? '⌛ Creating...' : <>Create Account <RiArrowRightLine /></>}
-                        </button>
-                      </div>
-                    </motion.form>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.div>
-
-        {/* Security note */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-          className="flex items-center justify-center gap-2 mt-4 text-[11px] text-[#8A9BB0]"
-        >
-          <RiShieldCheckLine className="text-scheme-green-light" size={13} />
-          Your data is stored securely on your device. No sensitive information leaves your browser.
-        </motion.div>
+      <div style={{ height: 5, display: 'flex' }}>
+        <div style={{ flex: 1, background: '#FF6B00' }} />
+        <div style={{ flex: 1, background: '#fff', borderTop: '2px solid #eee' }} />
+        <div style={{ flex: 1, background: '#138808' }} />
       </div>
     </div>
   )
