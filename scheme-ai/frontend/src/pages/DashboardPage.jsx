@@ -29,35 +29,6 @@ export default function DashboardPage() {
         <div style={{ flex: 1, background: '#138808' }} />
       </div>
 
-      {/* Navbar */}
-      <nav style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 5%', height: 60, background: '#fff',
-        borderBottom: '1px solid #f0f0f0', boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }} onClick={() => navigate('/')}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, #FF6B00, #FFAA00)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🏛️</div>
-          <span style={{ fontWeight: 800, fontSize: 20 }}>Scheme<span style={{ color: '#FF6B00' }}>-AI</span></span>
-        </div>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {['Home', 'Talk to AI', 'Schemes', 'Scan ID', 'Dashboard'].map((tab, i) => (
-            <button key={tab}
-              onClick={() => i === 0 ? navigate('/') : i === 1 ? navigate('/chat') : i === 2 ? navigate('/schemes') : i === 3 ? navigate('/ocr') : null}
-              style={{
-                background: i === 4 ? '#fff8f0' : 'transparent',
-                color: i === 4 ? '#FF6B00' : '#555',
-                border: i === 4 ? '1px solid #ffd0a0' : '1px solid transparent',
-                borderRadius: 8, padding: '7px 16px', fontSize: 14,
-                fontWeight: i === 4 ? 700 : 400, cursor: 'pointer',
-              }}>{tab}</button>
-          ))}
-        </div>
-        <button onClick={() => navigate('/chat')}
-          style={{ background: 'linear-gradient(135deg, #FF6B00, #FFAA00)', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 22px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
-          🎙️ Talk to AI
-        </button>
-      </nav>
-
       <div style={{ padding: '32px 5%' }}>
         {/* Header */}
         <div style={{ marginBottom: 32 }}>

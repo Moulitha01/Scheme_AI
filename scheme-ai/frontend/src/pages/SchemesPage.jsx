@@ -69,47 +69,6 @@ export default function SchemesPage() {
         <div style={{ flex: 1, background: '#138808' }} />
       </div>
 
-      {/* Navbar */}
-      <nav style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 5%', height: 56, background: '#fff',
-        borderBottom: '1px solid #f0f0f0', boxShadow: '0 1px 8px rgba(0,0,0,0.06)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }} onClick={() => navigate('/')}>
-          <div style={{
-            width: 32, height: 32, borderRadius: 8,
-            background: 'linear-gradient(135deg, #FF6B00, #FFAA00)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
-          }}>🏛️</div>
-          <span style={{ fontWeight: 700, fontSize: 18 }}>
-            Scheme<span style={{ color: '#FF6B00' }}>-AI</span>
-          </span>
-        </div>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {['Home', 'Talk to AI', 'Schemes', 'Scan ID', 'Dashboard'].map((tab, i) => (
-            <button key={tab}
-              onClick={() => i === 0 ? navigate('/') : i === 1 ? navigate('/chat') : i === 3 ? navigate('/ocr') : i === 4 ? navigate('/dashboard') : null}
-              style={{
-                background: i === 2 ? '#fff8f0' : 'transparent',
-                color: i === 2 ? '#FF6B00' : '#555',
-                border: i === 2 ? '1px solid #ffd0a0' : '1px solid transparent',
-                borderRadius: 8, padding: '6px 14px', fontSize: 13,
-                fontWeight: i === 2 ? 600 : 400, cursor: 'pointer',
-              }}>
-              {tab}
-            </button>
-          ))}
-        </div>
-        <button onClick={() => navigate('/chat')}
-          style={{
-            background: 'linear-gradient(135deg, #FF6B00, #FFAA00)',
-            color: '#fff', border: 'none', borderRadius: 8,
-            padding: '7px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-          }}>
-          🎙️ Talk to AI
-        </button>
-      </nav>
-
       {/* Hero */}
       <div style={{
         background: 'linear-gradient(135deg, #1a1050, #2a1a80)',
