@@ -1,6 +1,7 @@
-// src/pages/FormPage.jsx
+// frontend/src/pages/FormPage.jsx
 import { useState, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useLanguage } from '../context/LanguageContext'
 
 const API_BASE = 'http://localhost:5000'
 
@@ -23,23 +24,8 @@ const STATE_OPTIONS = [
   'Delhi', 'Chandigarh', 'Puducherry',
 ]
 
-const FORM_FIELDS = [
-  { key: 'name',       label: 'Full Name',           icon: '👤', type: 'text',     required: true },
-  { key: 'dob',        label: 'Date of Birth',        icon: '🎂', type: 'text',     placeholder: 'DD/MM/YYYY' },
-  { key: 'age',        label: 'Age',                  icon: '🔢', type: 'number' },
-  { key: 'gender',     label: 'Gender',               icon: '⚧',  type: 'select',   options: GENDER_OPTIONS },
-  { key: 'aadhaar',    label: 'Aadhaar Number',       icon: '🪪', type: 'text',     placeholder: 'XXXX XXXX XXXX' },
-  { key: 'mobile',     label: 'Mobile Number',        icon: '📱', type: 'tel' },
-  { key: 'caste',      label: 'Caste Category',       icon: '📋', type: 'select',   options: CASTE_OPTIONS },
-  { key: 'occupation', label: 'Occupation',           icon: '💼', type: 'text' },
-  { key: 'income',     label: 'Annual Income (₹)',    icon: '💰', type: 'number' },
-  { key: 'state',      label: 'State',                icon: '📍', type: 'select',   options: STATE_OPTIONS },
-  { key: 'district',   label: 'District',             icon: '🏘️', type: 'text' },
-  { key: 'pincode',    label: 'Pincode',              icon: '📮', type: 'text' },
-  { key: 'address',    label: 'Full Address',         icon: '🏠', type: 'textarea' },
-]
-
 export default function FormPage({ scheme = null, prefillData = {}, onBack }) {
+  const { t } = useLanguage()
   const fileInputRef = useRef(null)
   const cameraInputRef = useRef(null)
   const videoRef = useRef(null)
@@ -56,6 +42,24 @@ export default function FormPage({ scheme = null, prefillData = {}, onBack }) {
   const [generatingPdf, setGeneratingPdf] = useState(false)
   const [cameraActive, setCameraActive] = useState(false)
 
+  // Field labels are translated; the underlying `key` and select `options`
+  // stay as stable English data values (used for OCR matching / PDF output).
+  const FORM_FIELDS = [
+    { key: 'name',       label: t('form.field.name', 'Full Name'),           icon: '👤', type: 'text',     required: true },
+    { key: 'dob',        label: t('form.field.dob', 'Date of Birth'),        icon: '🎂', type: 'text',     placeholder: 'DD/MM/YYYY' },
+    { key: 'age',        label: t('form.field.age', 'Age'),                  icon: '🔢', type: 'number' },
+    { key: 'gender',     label: t('form.field.gender', 'Gender'),            icon: '⚧',  type: 'select',   options: GENDER_OPTIONS },
+    { key: 'aadhaar',    label: t('form.field.aadhaar', 'Aadhaar Number'),   icon: '🪪', type: 'text',     placeholder: 'XXXX XXXX XXXX' },
+    { key: 'mobile',     label: t('form.field.mobile', 'Mobile Number'),     icon: '📱', type: 'tel' },
+    { key: 'caste',      label: t('form.field.caste', 'Caste Category'),     icon: '📋', type: 'select',   options: CASTE_OPTIONS },
+    { key: 'occupation', label: t('form.field.occupation', 'Occupation'),    icon: '💼', type: 'text' },
+    { key: 'income',     label: t('form.field.income', 'Annual Income (₹)'), icon: '💰', type: 'number' },
+    { key: 'state',      label: t('form.field.state', 'State'),              icon: '📍', type: 'select',   options: STATE_OPTIONS },
+    { key: 'district',   label: t('form.field.district', 'District'),        icon: '🏘️', type: 'text' },
+    { key: 'pincode',    label: t('form.field.pincode', 'Pincode'),          icon: '📮', type: 'text' },
+    { key: 'address',    label: t('form.field.address', 'Full Address'),     icon: '🏠', type: 'textarea' },
+  ]
+
   // ── Open device camera (live preview) ──────────────────────
   const openCamera = async () => {
     try {
@@ -65,7 +69,6 @@ export default function FormPage({ scheme = null, prefillData = {}, onBack }) {
       streamRef.current = stream
       setStage(STAGE.CAMERA)
       setCameraActive(true)
-      // Give DOM time to render video element
       setTimeout(() => {
         if (videoRef.current) {
           videoRef.current.srcObject = stream
@@ -73,7 +76,7 @@ export default function FormPage({ scheme = null, prefillData = {}, onBack }) {
         }
       }, 100)
     } catch (err) {
-      setError('Camera not available. Please use file upload instead.')
+      setError(t('form.error.cameraUnavailable', 'Camera not available. Please use file upload instead.'))
     }
   }
 
@@ -151,7 +154,7 @@ export default function FormPage({ scheme = null, prefillData = {}, onBack }) {
       setStage(STAGE.FORM)
 
     } catch (err) {
-      setError(`OCR failed: ${err.message}`)
+      setError(`${t('form.error.ocrFailed', 'OCR failed')}: ${err.message}`)
       setStage(STAGE.UPLOAD)
     }
   }
@@ -264,7 +267,7 @@ export default function FormPage({ scheme = null, prefillData = {}, onBack }) {
       setStage(STAGE.PDF)
 
     } catch (err) {
-      setError(`PDF failed: ${err.message}`)
+      setError(`${t('form.error.pdfFailed', 'PDF failed')}: ${err.message}`)
     } finally {
       setGeneratingPdf(false)
     }
@@ -274,10 +277,10 @@ export default function FormPage({ scheme = null, prefillData = {}, onBack }) {
 
   // ── PROGRESS BAR ───────────────────────────────────────────
   const STEPS = [
-    { s: STAGE.UPLOAD,     icon: '📄', label: 'Upload' },
-    { s: STAGE.EXTRACTING, icon: '🔍', label: 'Scanning' },
-    { s: STAGE.FORM,       icon: '✍️', label: 'Fill Form' },
-    { s: STAGE.PDF,        icon: '📥', label: 'Download' },
+    { s: STAGE.UPLOAD,     icon: '📄', label: t('form.step.upload', 'Upload') },
+    { s: STAGE.EXTRACTING, icon: '🔍', label: t('form.step.scanning', 'Scanning') },
+    { s: STAGE.FORM,       icon: '✍️', label: t('form.step.fillForm', 'Fill Form') },
+    { s: STAGE.PDF,        icon: '📥', label: t('form.step.download', 'Download') },
   ]
   const stageOrder = [STAGE.UPLOAD, STAGE.EXTRACTING, STAGE.FORM, STAGE.PDF]
   const currentIdx = stageOrder.indexOf(stage === STAGE.CAMERA ? STAGE.UPLOAD : stage)
@@ -289,10 +292,10 @@ export default function FormPage({ scheme = null, prefillData = {}, onBack }) {
       <div className="bg-white/90 backdrop-blur border-b border-orange-100 px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
         <button onClick={onBack}
           className="flex items-center gap-1 text-gray-600 hover:text-gray-800 font-semibold text-sm">
-          ← Back
+          ← {t('form.back', 'Back')}
         </button>
         <div className="flex-1 text-center">
-          <h1 className="font-bold text-gray-800">📝 Apply for Scheme</h1>
+          <h1 className="font-bold text-gray-800">📝 {t('form.applyForScheme', 'Apply for Scheme')}</h1>
           {scheme && <p className="text-xs text-orange-600 truncate">{scheme.name}</p>}
         </div>
       </div>
@@ -339,7 +342,7 @@ export default function FormPage({ scheme = null, prefillData = {}, onBack }) {
                       <p className="text-gray-400 text-xs">{(uploadedFile.size / 1024).toFixed(0)} KB</p>
                     </div>
                     <button onClick={() => { setUploadedFile(null); setPreviewUrl(null) }}
-                      className="text-xs text-red-500 underline">Remove</button>
+                      className="text-xs text-red-500 underline">{t('form.remove', 'Remove')}</button>
                   </div>
                 </div>
               )}
@@ -349,9 +352,9 @@ export default function FormPage({ scheme = null, prefillData = {}, onBack }) {
                 <div className="bg-white rounded-3xl shadow-lg border border-orange-100 p-8">
                   <div className="text-center mb-6">
                     <div className="text-5xl mb-3">🪪</div>
-                    <h2 className="text-xl font-bold text-gray-800 mb-1">Upload Aadhaar Card</h2>
+                    <h2 className="text-xl font-bold text-gray-800 mb-1">{t('form.uploadTitle', 'Upload Aadhaar Card')}</h2>
                     <p className="text-gray-500 text-sm">
-                      We'll extract your details automatically
+                      {t('form.uploadSubtitle', "We'll extract your details automatically")}
                     </p>
                   </div>
 
@@ -361,8 +364,8 @@ export default function FormPage({ scheme = null, prefillData = {}, onBack }) {
                       className="flex flex-col items-center gap-3 p-6 rounded-2xl border-2 border-orange-200 bg-orange-50 hover:bg-orange-100 hover:border-orange-400 transition-all group">
                       <span className="text-4xl group-hover:scale-110 transition-transform">📷</span>
                       <div className="text-center">
-                        <p className="font-bold text-gray-800 text-sm">Take Photo</p>
-                        <p className="text-gray-500 text-xs mt-0.5">Use camera</p>
+                        <p className="font-bold text-gray-800 text-sm">{t('form.takePhoto', 'Take Photo')}</p>
+                        <p className="text-gray-500 text-xs mt-0.5">{t('form.useCamera', 'Use camera')}</p>
                       </div>
                     </button>
 
@@ -371,7 +374,7 @@ export default function FormPage({ scheme = null, prefillData = {}, onBack }) {
                       className="flex flex-col items-center gap-3 p-6 rounded-2xl border-2 border-blue-200 bg-blue-50 hover:bg-blue-100 hover:border-blue-400 transition-all group">
                       <span className="text-4xl group-hover:scale-110 transition-transform">📁</span>
                       <div className="text-center">
-                        <p className="font-bold text-gray-800 text-sm">Upload File</p>
+                        <p className="font-bold text-gray-800 text-sm">{t('form.uploadFile', 'Upload File')}</p>
                         <p className="text-gray-500 text-xs mt-0.5">JPG, PNG, PDF</p>
                       </div>
                     </button>
@@ -385,7 +388,7 @@ export default function FormPage({ scheme = null, prefillData = {}, onBack }) {
                     className="hidden" onChange={(e) => handleFile(e.target.files[0])} />
 
                   <p className="text-center text-xs text-gray-400">
-                    🔒 Your document is processed securely and not stored
+                    🔒 {t('form.secureNote', 'Your document is processed securely and not stored')}
                   </p>
                 </div>
               )}
@@ -397,14 +400,14 @@ export default function FormPage({ scheme = null, prefillData = {}, onBack }) {
                   onClick={extractFromDocument}
                   className="w-full py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-bold text-lg shadow-lg transition-all mt-2"
                 >
-                  🔍 Scan & Extract Details
+                  🔍 {t('form.scanExtract', 'Scan & Extract Details')}
                 </motion.button>
               )}
 
               {/* Skip OCR — fill manually */}
               <button onClick={() => setStage(STAGE.FORM)}
                 className="w-full mt-3 py-3 text-gray-500 text-sm underline hover:text-gray-700">
-                Skip — Fill form manually
+                {t('form.skipManual', 'Skip — Fill form manually')}
               </button>
             </motion.div>
           )}
@@ -426,18 +429,18 @@ export default function FormPage({ scheme = null, prefillData = {}, onBack }) {
                     style={{ width: '80%', height: '55%', boxShadow: '0 0 0 9999px rgba(0,0,0,0.45)' }} />
                 </div>
                 <p className="absolute top-3 left-0 right-0 text-center text-white text-sm font-medium">
-                  Align Aadhaar card within the frame
+                  {t('form.alignCard', 'Align Aadhaar card within the frame')}
                 </p>
               </div>
 
               <div className="p-4 bg-gray-900 flex gap-3">
                 <button onClick={() => { stopCamera(); setStage(STAGE.UPLOAD) }}
                   className="flex-1 py-3 border border-gray-600 text-gray-300 rounded-xl font-semibold">
-                  ✕ Cancel
+                  ✕ {t('form.cancel', 'Cancel')}
                 </button>
                 <button onClick={capturePhoto}
                   className="flex-2 flex-1 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold text-lg transition-all">
-                  📸 Capture
+                  📸 {t('form.capture', 'Capture')}
                 </button>
               </div>
             </motion.div>
@@ -450,12 +453,16 @@ export default function FormPage({ scheme = null, prefillData = {}, onBack }) {
               className="bg-white rounded-3xl shadow-lg border border-orange-100 p-12 text-center"
             >
               <div className="text-6xl mb-6 animate-bounce">🔍</div>
-              <h2 className="text-xl font-bold text-gray-800 mb-2">Reading your Aadhaar...</h2>
+              <h2 className="text-xl font-bold text-gray-800 mb-2">{t('form.readingAadhaar', 'Reading your Aadhaar...')}</h2>
               <p className="text-gray-500 text-sm mb-8">
-                Using AI to extract your personal details
+                {t('form.usingAI', 'Using AI to extract your personal details')}
               </p>
               <div className="flex justify-center gap-6">
-                {['OCR Scan', 'AI Extract', 'Pre-filling'].map((step, i) => (
+                {[
+                  t('form.ocrScan', 'OCR Scan'),
+                  t('form.aiExtract', 'AI Extract'),
+                  t('form.prefilling', 'Pre-filling'),
+                ].map((step, i) => (
                   <div key={step} className="flex flex-col items-center gap-2">
                     <div className="w-12 h-12 rounded-full bg-orange-100 border-2 border-orange-300 flex items-center justify-center">
                       <div className="w-4 h-4 rounded-full bg-orange-500 animate-ping"
@@ -478,10 +485,10 @@ export default function FormPage({ scheme = null, prefillData = {}, onBack }) {
                   <span className="text-2xl">✅</span>
                   <div>
                     <p className="font-bold text-green-700 text-sm">
-                      {filledFields.length} fields extracted ({confidence}% confidence)
+                      {filledFields.length} {t('form.fieldsExtracted', 'fields extracted')} ({confidence}% {t('form.confidence', 'confidence')})
                     </p>
                     <p className="text-green-600 text-xs mt-0.5">
-                      Green fields were auto-filled from your Aadhaar. Please verify.
+                      {t('form.greenFieldsNote', 'Green fields were auto-filled from your Aadhaar. Please verify.')}
                     </p>
                   </div>
                 </div>
@@ -489,8 +496,8 @@ export default function FormPage({ scheme = null, prefillData = {}, onBack }) {
 
               <div className="bg-white rounded-3xl shadow-lg border border-orange-100 overflow-hidden">
                 <div className="bg-orange-500 px-6 py-4">
-                  <h2 className="text-white font-bold text-lg">Personal Details</h2>
-                  <p className="text-orange-100 text-sm">Review and fill any missing fields</p>
+                  <h2 className="text-white font-bold text-lg">{t('form.personalDetails', 'Personal Details')}</h2>
+                  <p className="text-orange-100 text-sm">{t('form.reviewFill', 'Review and fill any missing fields')}</p>
                 </div>
 
                 <div className="p-5 space-y-4">
@@ -505,7 +512,7 @@ export default function FormPage({ scheme = null, prefillData = {}, onBack }) {
                           {required && <span className="text-red-400 text-xs">*</span>}
                           {isAutoFilled && (
                             <span className="ml-auto text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-                              ✓ Auto-filled
+                              ✓ {t('form.autoFilled', 'Auto-filled')}
                             </span>
                           )}
                         </label>
@@ -514,17 +521,17 @@ export default function FormPage({ scheme = null, prefillData = {}, onBack }) {
                           <select value={value} onChange={(e) => updateField(key, e.target.value)}
                             className={`w-full px-4 py-3 rounded-xl border text-base transition-all focus:outline-none focus:ring-2 focus:ring-orange-300
                               ${isAutoFilled && value ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-gray-50 focus:bg-white'}`}>
-                            <option value="">Select {label}</option>
+                            <option value="">{t('form.select', 'Select')} {label}</option>
                             {options.map(o => <option key={o} value={o}>{o}</option>)}
                           </select>
                         ) : type === 'textarea' ? (
                           <textarea value={value} onChange={(e) => updateField(key, e.target.value)}
-                            placeholder={placeholder || `Enter ${label}`} rows={3}
+                            placeholder={placeholder || `${t('form.enter', 'Enter')} ${label}`} rows={3}
                             className={`w-full px-4 py-3 rounded-xl border text-base transition-all focus:outline-none focus:ring-2 focus:ring-orange-300 resize-none
                               ${isAutoFilled && value ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-gray-50 focus:bg-white'}`} />
                         ) : (
                           <input type={type} value={value} onChange={(e) => updateField(key, e.target.value)}
-                            placeholder={placeholder || `Enter ${label}`}
+                            placeholder={placeholder || `${t('form.enter', 'Enter')} ${label}`}
                             className={`w-full px-4 py-3 rounded-xl border text-base transition-all focus:outline-none focus:ring-2 focus:ring-orange-300
                               ${isAutoFilled && value ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-gray-50 focus:bg-white'}`} />
                         )}
@@ -536,11 +543,11 @@ export default function FormPage({ scheme = null, prefillData = {}, onBack }) {
                 <div className="px-5 pb-5 flex gap-3">
                   <button onClick={() => setStage(STAGE.UPLOAD)}
                     className="flex-1 py-3 border-2 border-gray-200 text-gray-600 rounded-xl font-semibold hover:bg-gray-50 transition-all">
-                    ← Re-upload
+                    ← {t('form.reupload', 'Re-upload')}
                   </button>
                   <button onClick={downloadPDF} disabled={generatingPdf}
                     className="flex-1 py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-xl font-bold transition-all">
-                    {generatingPdf ? '⏳ Generating...' : '📥 Download PDF'}
+                    {generatingPdf ? `⏳ ${t('form.generating', 'Generating...')}` : `📥 ${t('form.downloadPDF', 'Download PDF')}`}
                   </button>
                 </div>
               </div>
@@ -554,31 +561,31 @@ export default function FormPage({ scheme = null, prefillData = {}, onBack }) {
               className="bg-white rounded-3xl shadow-xl border border-green-200 p-10 text-center"
             >
               <div className="text-6xl mb-4">🎉</div>
-              <h2 className="text-2xl font-bold text-green-700 mb-2">PDF Downloaded!</h2>
-              <p className="text-gray-500 text-sm mb-2">Your pre-filled application is ready.</p>
+              <h2 className="text-2xl font-bold text-green-700 mb-2">{t('form.pdfDownloaded', 'PDF Downloaded!')}</h2>
+              <p className="text-gray-500 text-sm mb-2">{t('form.applicationReady', 'Your pre-filled application is ready.')}</p>
 
               {scheme?.applyLink && (
                 <div className="bg-green-50 rounded-2xl p-4 mb-6 text-left">
                   <p className="font-bold text-green-800 text-sm">{scheme.name}</p>
                   <a href={scheme.applyLink} target="_blank" rel="noreferrer"
                     className="text-blue-600 underline text-sm mt-1 block">
-                    🔗 Submit at official portal →
+                    🔗 {t('form.submitAtPortal', 'Submit at official portal')} →
                   </a>
                 </div>
               )}
 
               <p className="text-xs text-gray-400 mb-6">
-                Take the printed form to your nearest government office or submit online.
+                {t('form.takeToOffice', 'Take the printed form to your nearest government office or submit online.')}
               </p>
 
               <div className="flex gap-3 justify-center flex-wrap">
                 <button onClick={downloadPDF}
                   className="px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-full font-bold transition-all">
-                  📥 Download Again
+                  📥 {t('form.downloadAgain', 'Download Again')}
                 </button>
                 <button onClick={onBack}
                   className="px-6 py-3 border-2 border-gray-200 text-gray-600 rounded-full font-semibold hover:bg-gray-50 transition-all">
-                  ← Back to Schemes
+                  ← {t('form.backToSchemes', 'Back to Schemes')}
                 </button>
               </div>
             </motion.div>
@@ -591,7 +598,7 @@ export default function FormPage({ scheme = null, prefillData = {}, onBack }) {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
             className="mt-4 bg-red-50 border border-red-200 rounded-2xl p-4 text-red-700 text-sm text-center">
             ⚠️ {error}
-            <button onClick={() => setError('')} className="ml-3 underline">Dismiss</button>
+            <button onClick={() => setError('')} className="ml-3 underline">{t('form.dismiss', 'Dismiss')}</button>
           </motion.div>
         )}
 

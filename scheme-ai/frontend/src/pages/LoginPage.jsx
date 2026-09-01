@@ -2,9 +2,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
+import { useLanguage } from '../context/LanguageContext'
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const { t } = useLanguage()
   const [phone, setPhone] = useState('')
   const [otp, setOtp] = useState('')
   const [step, setStep] = useState('phone')
@@ -12,22 +14,22 @@ export default function LoginPage() {
   const [error, setError] = useState('')
 
   const sendOTP = async () => {
-    if (phone.length < 10) { setError('Please enter a valid 10-digit mobile number'); return }
+    if (phone.length < 10) { setError(t('login.errorInvalidPhone', 'Please enter a valid 10-digit mobile number')); return }
     setLoading(true); setError('')
     try {
       await axios.post('/api/users/send-otp', { phone })
       setStep('otp')
-    } catch { setError('Could not send OTP. Please try again.') }
+    } catch { setError(t('login.errorSendOtp', 'Could not send OTP. Please try again.')) }
     finally { setLoading(false) }
   }
 
   const verifyOTP = async () => {
-    if (otp.length < 4) { setError('Please enter the OTP'); return }
+    if (otp.length < 4) { setError(t('login.errorEnterOtp', 'Please enter the OTP')); return }
     setLoading(true); setError('')
     try {
       await axios.post('/api/users/verify-otp', { phone, otp })
       navigate('/dashboard')
-    } catch { setError('Invalid OTP. Please try again.') }
+    } catch { setError(t('login.errorInvalidOtp', 'Invalid OTP. Please try again.')) }
     finally { setLoading(false) }
   }
 
@@ -46,7 +48,9 @@ export default function LoginPage() {
           <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, #FF6B00, #FFAA00)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🏛️</div>
           <span style={{ fontWeight: 800, fontSize: 20 }}>Scheme<span style={{ color: '#FF6B00' }}>-AI</span></span>
         </div>
-        <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', fontSize: 14, color: '#555', cursor: 'pointer' }}>← Back to Home</button>
+        <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', fontSize: 14, color: '#555', cursor: 'pointer' }}>
+          ← {t('login.backToHome', 'Back to Home')}
+        </button>
       </nav>
 
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 5%' }}>
@@ -54,8 +58,12 @@ export default function LoginPage() {
 
           <div style={{ textAlign: 'center', marginBottom: 32 }}>
             <div style={{ width: 64, height: 64, borderRadius: 16, background: 'linear-gradient(135deg, #FF6B00, #FFAA00)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, margin: '0 auto 16px' }}>🏛️</div>
-            <h1 style={{ fontSize: 24, fontWeight: 800, color: '#1a1a2e', margin: '0 0 6px' }}>Sign in to Scheme-AI</h1>
-            <p style={{ fontSize: 14, color: '#888', margin: 0 }}>No password needed — just your mobile number</p>
+            <h1 style={{ fontSize: 24, fontWeight: 800, color: '#1a1a2e', margin: '0 0 6px' }}>
+              {t('login.title', 'Sign in to Scheme-AI')}
+            </h1>
+            <p style={{ fontSize: 14, color: '#888', margin: 0 }}>
+              {t('login.subtitle', 'No password needed — just your mobile number')}
+            </p>
           </div>
 
           {error && (
@@ -67,14 +75,16 @@ export default function LoginPage() {
           {step === 'phone' ? (
             <>
               <div style={{ marginBottom: 20 }}>
-                <label style={{ fontSize: 14, fontWeight: 600, color: '#333', display: 'block', marginBottom: 8 }}>Mobile Number</label>
+                <label style={{ fontSize: 14, fontWeight: 600, color: '#333', display: 'block', marginBottom: 8 }}>
+                  {t('login.mobileNumber', 'Mobile Number')}
+                </label>
                 <div style={{ display: 'flex', border: '2px solid #e0e0e0', borderRadius: 12, overflow: 'hidden', transition: 'border 0.2s' }}>
                   <span style={{ background: '#f8f8f8', padding: '14px 16px', fontSize: 15, color: '#555', borderRight: '1px solid #e0e0e0', fontWeight: 600 }}>🇮🇳 +91</span>
                   <input
                     type="tel" maxLength={10} value={phone}
                     onChange={e => setPhone(e.target.value.replace(/\D/g, ''))}
                     onKeyDown={e => e.key === 'Enter' && sendOTP()}
-                    placeholder="Enter 10-digit number"
+                    placeholder={t('login.enterDigits', 'Enter 10-digit number')}
                     style={{ flex: 1, padding: '14px 16px', border: 'none', fontSize: 16, outline: 'none', color: '#1a1a2e' }}
                   />
                 </div>
@@ -85,18 +95,20 @@ export default function LoginPage() {
                   color: phone.length >= 10 ? '#fff' : '#aaa', border: 'none', borderRadius: 12,
                   padding: '16px', fontSize: 16, fontWeight: 700, cursor: phone.length >= 10 ? 'pointer' : 'default',
                 }}>
-                {loading ? '⏳ Sending OTP...' : 'Send OTP →'}
+                {loading ? `⏳ ${t('login.sendingOtp', 'Sending OTP...')}` : `${t('login.sendOtp', 'Send OTP')} →`}
               </button>
             </>
           ) : (
             <>
               <div style={{ marginBottom: 20 }}>
-                <label style={{ fontSize: 14, fontWeight: 600, color: '#333', display: 'block', marginBottom: 8 }}>Enter OTP sent to +91 {phone}</label>
+                <label style={{ fontSize: 14, fontWeight: 600, color: '#333', display: 'block', marginBottom: 8 }}>
+                  {t('login.otpSentTo', 'Enter OTP sent to')} +91 {phone}
+                </label>
                 <input
                   type="tel" maxLength={6} value={otp}
                   onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
                   onKeyDown={e => e.key === 'Enter' && verifyOTP()}
-                  placeholder="Enter OTP"
+                  placeholder={t('login.enterOtp', 'Enter OTP')}
                   style={{ width: '100%', padding: '16px', border: '2px solid #e0e0e0', borderRadius: 12, fontSize: 24, textAlign: 'center', letterSpacing: 8, fontWeight: 700, outline: 'none', boxSizing: 'border-box', color: '#1a1a2e' }}
                 />
               </div>
@@ -106,11 +118,11 @@ export default function LoginPage() {
                   color: otp.length >= 4 ? '#fff' : '#aaa', border: 'none', borderRadius: 12,
                   padding: '16px', fontSize: 16, fontWeight: 700, cursor: otp.length >= 4 ? 'pointer' : 'default', marginBottom: 12,
                 }}>
-                {loading ? '⏳ Verifying...' : 'Verify & Sign In ✓'}
+                {loading ? `⏳ ${t('login.verifying', 'Verifying...')}` : `${t('login.verifyAndSignIn', 'Verify & Sign In')} ✓`}
               </button>
               <button onClick={() => { setStep('phone'); setOtp(''); setError('') }}
                 style={{ width: '100%', background: 'none', border: '1px solid #e0e0e0', borderRadius: 12, padding: '12px', fontSize: 14, color: '#555', cursor: 'pointer' }}>
-                ← Change number
+                ← {t('login.changeNumber', 'Change number')}
               </button>
             </>
           )}
@@ -118,7 +130,7 @@ export default function LoginPage() {
           <div style={{ textAlign: 'center', marginTop: 24 }}>
             <button onClick={() => navigate('/chat')}
               style={{ background: 'none', border: 'none', fontSize: 14, color: '#FF6B00', cursor: 'pointer', fontWeight: 600, textDecoration: 'underline' }}>
-              Skip — use without signing in →
+              {t('login.skip', 'Skip — use without signing in')} →
             </button>
           </div>
         </div>
