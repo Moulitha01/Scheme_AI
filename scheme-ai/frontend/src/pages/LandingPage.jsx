@@ -175,7 +175,7 @@ export default function LandingPage() {
             {/* Mic button */}
             <div style={{ textAlign: 'center', marginBottom: 24 }}>
               <motion.button
-                onClick={() => navigate('/chat')}
+                onClick={() => navigate('/elderly')}
                 whileTap={{ scale: 0.95 }}
                 style={{
                   width: 72, height: 72, borderRadius: '50%',
@@ -337,10 +337,7 @@ export default function LandingPage() {
             }}>2</span>
           </div>
 
-          {[
-            { name: 'PM-KISAN Samman Nidhi', ministry: 'Ministry of Agriculture', benefit: '₹6,000/year', match: 95 },
-            { name: 'Ayushman Bharat PM-JAY', ministry: 'Ministry of Health', benefit: '₹5 lakh/year health', match: 88 },
-          ].map((s, i) => (
+          {tList('demo.schemeCards').map((s, i) => (
             <div key={i} style={{
               background: '#fff', border: '1px solid #e8e8e8', borderRadius: 12,
               padding: 16, display: 'flex', alignItems: 'center', gap: 14,
@@ -387,15 +384,15 @@ export default function LandingPage() {
               display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
             }}>🌾</div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#1a1a2e' }}>Uzhavar Pathukappu</div>
-              <div style={{ fontSize: 12, color: '#1a7a4a', marginTop: 2 }}>Govt of Tamil Nadu</div>
-              <div style={{ fontSize: 13, color: '#1a7a1a', fontWeight: 600, marginTop: 4 }}>✓ ₹2 lakh insurance</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#1a1a2e' }}>{t('demo.stateScheme.name')}</div>
+              <div style={{ fontSize: 12, color: '#1a7a4a', marginTop: 2 }}>{t('demo.stateScheme.ministry')}</div>
+              <div style={{ fontSize: 13, color: '#1a7a1a', fontWeight: 600, marginTop: 4 }}>✓ {t('demo.stateScheme.benefit')}</div>
             </div>
             <div style={{
               background: '#e8f8e8', color: '#1a7a1a',
               fontWeight: 700, fontSize: 14, padding: '4px 10px', borderRadius: 20,
               border: '1px solid #90d090',
-            }}>92%</div>
+            }}>{t('demo.stateScheme.match')}%</div>
           </div>
         </div>
       </section>

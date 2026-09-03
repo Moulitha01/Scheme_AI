@@ -29,7 +29,10 @@ export function LanguageProvider({ children }) {
   useEffect(() => {
     localStorage.setItem('schemeai_lang_code', langCode)
     document.documentElement.lang = langCode
-    document.documentElement.dir = langCode === 'ur' ? 'rtl' : 'ltr'
+    // Note: not flipping document.dir for Urdu — our components aren't
+    // built for RTL yet, so a blanket dir="rtl" just scrambles the layout
+    // without actually rendering Urdu correctly. Revisit once Urdu has
+    // real translated copy and the components are RTL-tested.
   }, [langCode])
 
   const language = LANGUAGES.find(l => l.code === langCode) || LANGUAGES[0]
