@@ -11,6 +11,14 @@ const en = {
     home: 'Home', talkToAI: 'Talk to AI', schemes: 'Schemes',
     scanId: 'Scan ID', dashboard: 'Dashboard', speakNow: 'Speak now',
   },
+  modeSelect: {
+    title: 'How would you like to continue?',
+    subtitle: "Choose whatever's easiest for you",
+    textChatTitle: 'Text Chat',
+    textChatDesc: 'Type or speak, see results on screen',
+    voiceOnlyTitle: 'Voice-only Mode',
+    voiceOnlyDesc: 'Big buttons, spoken answers — built for easy use',
+  },
   hero: {
     badge: '✦ HACKATHON 3.0 — GENERATIVE AI FOR SOCIAL IMPACT',
     titleLine1: 'Speak once.',
@@ -102,6 +110,14 @@ const hi = {
     home: 'होम', talkToAI: 'AI से बात करें', schemes: 'योजनाएं',
     scanId: 'ID स्कैन करें', dashboard: 'डैशबोर्ड', speakNow: 'अभी बोलें',
   },
+  modeSelect: {
+    title: 'आप कैसे आगे बढ़ना चाहेंगे?',
+    subtitle: 'जो भी आपके लिए आसान हो वह चुनें',
+    textChatTitle: 'टेक्स्ट चैट',
+    textChatDesc: 'टाइप करें या बोलें, स्क्रीन पर परिणाम देखें',
+    voiceOnlyTitle: 'केवल-आवाज़ मोड',
+    voiceOnlyDesc: 'बड़े बटन, बोले गए जवाब — आसान उपयोग के लिए बनाया गया',
+  },
   hero: {
     badge: '✦ हैकाथॉन 3.0 — सामाजिक प्रभाव के लिए जेनरेटिव AI',
     titleLine1: 'एक बार बोलिए।',
@@ -152,10 +168,10 @@ const hi = {
     centralHeader: 'केंद्र सरकार की योजनाएं',
     stateHeader: 'तमिलनाडु राज्य की योजनाएं',
     schemeCards: [
-      { name: 'PM-KISAN Samman Nidhi', ministry: 'कृषि मंत्रालय', benefit: '₹6,000/वर्ष', match: 95 },
-      { name: 'Ayushman Bharat PM-JAY', ministry: 'स्वास्थ्य मंत्रालय', benefit: '₹5 लाख/वर्ष स्वास्थ्य', match: 88 },
+      { name: 'PM-KISAN Samman Nidhi', nameLocal: 'पीएम-किसान सम्मान निधि', ministry: 'कृषि मंत्रालय', benefit: '₹6,000/वर्ष', match: 95 },
+      { name: 'Ayushman Bharat PM-JAY', nameLocal: 'आयुष्मान भारत पीएम-जय', ministry: 'स्वास्थ्य मंत्रालय', benefit: '₹5 लाख/वर्ष स्वास्थ्य', match: 88 },
     ],
-    stateScheme: { name: 'Uzhavar Pathukappu', ministry: 'तमिलनाडु सरकार', benefit: '₹2 लाख बीमा', match: 92 },
+    stateScheme: { name: 'Uzhavar Pathukappu', nameLocal: 'उझावर पथुक्कप्पु', ministry: 'तमिलनाडु सरकार', benefit: '₹2 लाख बीमा', match: 92 },
   },
   cta: {
     heading: 'आपके लाभ आपका इंतज़ार कर रहे हैं।',
@@ -192,6 +208,14 @@ const ta = {
   nav: {
     home: 'முகப்பு', talkToAI: 'AI உடன் பேசுங்கள்', schemes: 'திட்டங்கள்',
     scanId: 'ID ஸ்கேன் செய்யவும்', dashboard: 'டாஷ்போர்டு', speakNow: 'இப்போது பேசுங்கள்',
+  },
+  modeSelect: {
+    title: 'நீங்கள் எப்படி தொடர விரும்புகிறீர்கள்?',
+    subtitle: 'உங்களுக்கு எது எளிதோ அதைத் தேர்ந்தெடுக்கவும்',
+    textChatTitle: 'உரை அரட்டை',
+    textChatDesc: 'தட்டச்சு செய்யுங்கள் அல்லது பேசுங்கள், திரையில் முடிவுகளைப் பார்க்கவும்',
+    voiceOnlyTitle: 'குரல்-மட்டும் பயன்முறை',
+    voiceOnlyDesc: 'பெரிய பொத்தான்கள், பேசப்படும் பதில்கள் — எளிதான பயன்பாட்டிற்காக உருவாக்கப்பட்டது',
   },
   hero: {
     badge: '✦ ஹேக்கத்தான் 3.0 — சமூக நலனுக்கான ஜெனரேட்டிவ் AI',
@@ -243,10 +267,10 @@ const ta = {
     centralHeader: 'மத்திய அரசு திட்டங்கள்',
     stateHeader: 'தமிழ்நாடு மாநில திட்டங்கள்',
     schemeCards: [
-      { name: 'PM-KISAN Samman Nidhi', ministry: 'வேளாண் அமைச்சகம்', benefit: '₹6,000/ஆண்டு', match: 95 },
-      { name: 'Ayushman Bharat PM-JAY', ministry: 'சுகாதார அமைச்சகம்', benefit: '₹5 லட்சம்/ஆண்டு சுகாதாரம்', match: 88 },
+      { name: 'PM-KISAN Samman Nidhi', nameLocal: 'பிஎம்-கிசான் சம்மான் நிதி', ministry: 'வேளாண் அமைச்சகம்', benefit: '₹6,000/ஆண்டு', match: 95 },
+      { name: 'Ayushman Bharat PM-JAY', nameLocal: 'ஆயுஷ்மான் பாரத் பிஎம்-ஜே', ministry: 'சுகாதார அமைச்சகம்', benefit: '₹5 லட்சம்/ஆண்டு சுகாதாரம்', match: 88 },
     ],
-    stateScheme: { name: 'Uzhavar Pathukappu', ministry: 'தமிழ்நாடு அரசு', benefit: '₹2 லட்சம் காப்பீடு', match: 92 },
+    stateScheme: { name: 'Uzhavar Pathukappu', nameLocal: 'உழவர் பாதுகாப்பு திட்டம்', ministry: 'தமிழ்நாடு அரசு', benefit: '₹2 லட்சம் காப்பீடு', match: 92 },
   },
   cta: {
     heading: 'உங்கள் நலன்கள் காத்திருக்கின்றன.',
@@ -281,6 +305,14 @@ const ta = {
 
 const te = {
   nav: { home: 'హోమ్', talkToAI: 'AI తో మాట్లాడండి', schemes: 'పథకాలు', scanId: 'ID స్కాన్ చేయండి', dashboard: 'డాష్‌బోర్డ్', speakNow: 'ఇప్పుడు మాట్లాడండి' },
+  modeSelect: {
+    title: 'మీరు ఎలా కొనసాగించాలనుకుంటున్నారు?',
+    subtitle: 'మీకు సులభమైనదాన్ని ఎంచుకోండి',
+    textChatTitle: 'టెక్స్ట్ చాట్',
+    textChatDesc: 'టైప్ చేయండి లేదా మాట్లాడండి, స్క్రీన్‌పై ఫలితాలు చూడండి',
+    voiceOnlyTitle: 'వాయిస్-మాత్రమే మోడ్',
+    voiceOnlyDesc: 'పెద్ద బటన్లు, మాట్లాడే సమాధానాలు — సులభమైన వాడకం కోసం రూపొందించబడింది',
+  },
   hero: {
     badge: '✦ హ్యాకథాన్ 3.0 — సామాజిక ప్రభావం కోసం జనరేటివ్ AI',
     titleLine1: 'ఒక్కసారి మాట్లాడండి.',
@@ -331,10 +363,10 @@ const te = {
     centralHeader: 'కేంద్ర ప్రభుత్వ పథకాలు',
     stateHeader: 'తమిళనాడు రాష్ట్ర పథకాలు',
     schemeCards: [
-      { name: 'PM-KISAN Samman Nidhi', ministry: 'వ్యవసాయ మంత్రిత్వ శాఖ', benefit: '₹6,000/సంవత్సరం', match: 95 },
-      { name: 'Ayushman Bharat PM-JAY', ministry: 'ఆరోగ్య మంత్రిత్వ శాఖ', benefit: '₹5 లక్షలు/సంవత్సరం ఆరోగ్యం', match: 88 },
+      { name: 'PM-KISAN Samman Nidhi', nameLocal: 'పీఎం-కిసాన్ సమ్మాన్ నిధి', ministry: 'వ్యవసాయ మంత్రిత్వ శాఖ', benefit: '₹6,000/సంవత్సరం', match: 95 },
+      { name: 'Ayushman Bharat PM-JAY', nameLocal: 'ఆయుష్మాన్ భారత్ పీఎం-జే', ministry: 'ఆరోగ్య మంత్రిత్వ శాఖ', benefit: '₹5 లక్షలు/సంవత్సరం ఆరోగ్యం', match: 88 },
     ],
-    stateScheme: { name: 'Uzhavar Pathukappu', ministry: 'తమిళనాడు ప్రభుత్వం', benefit: '₹2 లక్షల బీమా', match: 92 },
+    stateScheme: { name: 'Uzhavar Pathukappu', nameLocal: 'ఉళవర్ పతుక్కాప్పు', ministry: 'తమిళనాడు ప్రభుత్వం', benefit: '₹2 లక్షల బీమా', match: 92 },
   },
   cta: {
     heading: 'మీ ప్రయోజనాలు వేచి ఉన్నాయి.',
@@ -369,6 +401,14 @@ const te = {
 
 const bn = {
   nav: { home: 'হোম', talkToAI: 'AI-এর সাথে কথা বলুন', schemes: 'প্রকল্প', scanId: 'আইডি স্ক্যান করুন', dashboard: 'ড্যাশবোর্ড', speakNow: 'এখন বলুন' },
+  modeSelect: {
+    title: 'আপনি কীভাবে এগিয়ে যেতে চান?',
+    subtitle: 'আপনার জন্য যা সহজ তা বেছে নিন',
+    textChatTitle: 'টেক্সট চ্যাট',
+    textChatDesc: 'টাইপ করুন বা বলুন, স্ক্রিনে ফলাফল দেখুন',
+    voiceOnlyTitle: 'শুধু-ভয়েস মোড',
+    voiceOnlyDesc: 'বড় বোতাম, কথ্য উত্তর — সহজ ব্যবহারের জন্য তৈরি',
+  },
   hero: {
     badge: '✦ হ্যাকাথন ৩.০ — সামাজিক প্রভাবের জন্য জেনারেটিভ AI',
     titleLine1: 'একবার বলুন।',
@@ -419,10 +459,10 @@ const bn = {
     centralHeader: 'কেন্দ্রীয় সরকারের প্রকল্প',
     stateHeader: 'তামিলনাড়ু রাজ্যের প্রকল্প',
     schemeCards: [
-      { name: 'PM-KISAN Samman Nidhi', ministry: 'কৃষি মন্ত্রণালয়', benefit: '₹৬,০০০/বছর', match: 95 },
-      { name: 'Ayushman Bharat PM-JAY', ministry: 'স্বাস্থ্য মন্ত্রণালয়', benefit: '₹৫ লক্ষ/বছর স্বাস্থ্য', match: 88 },
+      { name: 'PM-KISAN Samman Nidhi', nameLocal: 'পিএম-কিষান সম্মান নিধি', ministry: 'কৃষি মন্ত্রণালয়', benefit: '₹৬,০০০/বছর', match: 95 },
+      { name: 'Ayushman Bharat PM-JAY', nameLocal: 'আয়ুষ্মান ভারত পিএম-জে', ministry: 'স্বাস্থ্য মন্ত্রণালয়', benefit: '₹৫ লক্ষ/বছর স্বাস্থ্য', match: 88 },
     ],
-    stateScheme: { name: 'Uzhavar Pathukappu', ministry: 'তামিলনাড়ু সরকার', benefit: '₹২ লক্ষ বীমা', match: 92 },
+    stateScheme: { name: 'Uzhavar Pathukappu', nameLocal: 'উঝাভার পাথুক্কাপ্পু', ministry: 'তামিলনাড়ু সরকার', benefit: '₹২ লক্ষ বীমা', match: 92 },
   },
   cta: {
     heading: 'আপনার সুবিধা অপেক্ষা করছে।',
@@ -457,6 +497,14 @@ const bn = {
 
 const mr = {
   nav: { home: 'मुख्यपृष्ठ', talkToAI: 'AI शी बोला', schemes: 'योजना', scanId: 'ID स्कॅन करा', dashboard: 'डॅशबोर्ड', speakNow: 'आता बोला' },
+  modeSelect: {
+    title: 'तुम्ही कसे पुढे जाऊ इच्छिता?',
+    subtitle: 'तुमच्यासाठी जे सोपे असेल ते निवडा',
+    textChatTitle: 'टेक्स्ट चॅट',
+    textChatDesc: 'टाइप करा किंवा बोला, स्क्रीनवर निकाल पहा',
+    voiceOnlyTitle: 'फक्त-आवाज मोड',
+    voiceOnlyDesc: 'मोठी बटणे, बोललेली उत्तरे — सोप्या वापरासाठी तयार केले',
+  },
   hero: {
     badge: '✦ हॅकाथॉन ३.० — सामाजिक प्रभावासाठी जनरेटिव्ह AI',
     titleLine1: 'एकदा बोला.',
@@ -507,10 +555,10 @@ const mr = {
     centralHeader: 'केंद्र सरकारच्या योजना',
     stateHeader: 'तमिळनाडू राज्याच्या योजना',
     schemeCards: [
-      { name: 'PM-KISAN Samman Nidhi', ministry: 'कृषी मंत्रालय', benefit: '₹6,000/वर्ष', match: 95 },
-      { name: 'Ayushman Bharat PM-JAY', ministry: 'आरोग्य मंत्रालय', benefit: '₹5 लाख/वर्ष आरोग्य', match: 88 },
+      { name: 'PM-KISAN Samman Nidhi', nameLocal: 'पीएम-किसान सन्मान निधी', ministry: 'कृषी मंत्रालय', benefit: '₹6,000/वर्ष', match: 95 },
+      { name: 'Ayushman Bharat PM-JAY', nameLocal: 'आयुष्मान भारत पीएम-जय', ministry: 'आरोग्य मंत्रालय', benefit: '₹5 लाख/वर्ष आरोग्य', match: 88 },
     ],
-    stateScheme: { name: 'Uzhavar Pathukappu', ministry: 'तमिळनाडू सरकार', benefit: '₹2 लाख विमा', match: 92 },
+    stateScheme: { name: 'Uzhavar Pathukappu', nameLocal: 'उझावर पथुक्कप्पू', ministry: 'तमिळनाडू सरकार', benefit: '₹2 लाख विमा', match: 92 },
   },
   cta: {
     heading: 'तुमचे लाभ वाट पाहत आहेत.',
@@ -545,6 +593,14 @@ const mr = {
 
 const kn = {
   nav: { home: 'ಮುಖಪುಟ', talkToAI: 'AI ಜೊತೆ ಮಾತನಾಡಿ', schemes: 'ಯೋಜನೆಗಳು', scanId: 'ID ಸ್ಕ್ಯಾನ್ ಮಾಡಿ', dashboard: 'ಡ್ಯಾಶ್‌ಬೋರ್ಡ್', speakNow: 'ಈಗ ಮಾತನಾಡಿ' },
+  modeSelect: {
+    title: 'ನೀವು ಹೇಗೆ ಮುಂದುವರಿಯಲು ಬಯಸುತ್ತೀರಿ?',
+    subtitle: 'ನಿಮಗೆ ಸುಲಭವಾದುದನ್ನು ಆಯ್ಕೆಮಾಡಿ',
+    textChatTitle: 'ಟೆಕ್ಸ್ಟ್ ಚಾಟ್',
+    textChatDesc: 'ಟೈಪ್ ಮಾಡಿ ಅಥವಾ ಮಾತನಾಡಿ, ಪರದೆಯ ಮೇಲೆ ಫಲಿತಾಂಶಗಳನ್ನು ನೋಡಿ',
+    voiceOnlyTitle: 'ಧ್ವನಿ-ಮಾತ್ರ ಮೋಡ್',
+    voiceOnlyDesc: 'ದೊಡ್ಡ ಬಟನ್‌ಗಳು, ಮಾತನಾಡುವ ಉತ್ತರಗಳು — ಸುಲಭ ಬಳಕೆಗಾಗಿ ರೂಪಿಸಲಾಗಿದೆ',
+  },
   hero: {
     badge: '✦ ಹ್ಯಾಕಥಾನ್ 3.0 — ಸಾಮಾಜಿಕ ಪರಿಣಾಮಕ್ಕಾಗಿ ಜನರೇಟಿವ್ AI',
     titleLine1: 'ಒಮ್ಮೆ ಮಾತನಾಡಿ.',
@@ -595,10 +651,10 @@ const kn = {
     centralHeader: 'ಕೇಂದ್ರ ಸರ್ಕಾರದ ಯೋಜನೆಗಳು',
     stateHeader: 'ತಮಿಳುನಾಡು ರಾಜ್ಯ ಯೋಜನೆಗಳು',
     schemeCards: [
-      { name: 'PM-KISAN Samman Nidhi', ministry: 'ಕೃಷಿ ಸಚಿವಾಲಯ', benefit: '₹6,000/ವರ್ಷ', match: 95 },
-      { name: 'Ayushman Bharat PM-JAY', ministry: 'ಆರೋಗ್ಯ ಸಚಿವಾಲಯ', benefit: '₹5 ಲಕ್ಷ/ವರ್ಷ ಆರೋಗ್ಯ', match: 88 },
+      { name: 'PM-KISAN Samman Nidhi', nameLocal: 'ಪಿಎಂ-ಕಿಸಾನ್ ಸಮ್ಮಾನ್ ನಿಧಿ', ministry: 'ಕೃಷಿ ಸಚಿವಾಲಯ', benefit: '₹6,000/ವರ್ಷ', match: 95 },
+      { name: 'Ayushman Bharat PM-JAY', nameLocal: 'ಆಯುಷ್ಮಾನ್ ಭಾರತ್ ಪಿಎಂ-ಜೇ', ministry: 'ಆರೋಗ್ಯ ಸಚಿವಾಲಯ', benefit: '₹5 ಲಕ್ಷ/ವರ್ಷ ಆರೋಗ್ಯ', match: 88 },
     ],
-    stateScheme: { name: 'Uzhavar Pathukappu', ministry: 'ತಮಿಳುನಾಡು ಸರ್ಕಾರ', benefit: '₹2 ಲಕ್ಷ ವಿಮೆ', match: 92 },
+    stateScheme: { name: 'Uzhavar Pathukappu', nameLocal: 'ಉಳವರ್ ಪತುಕ್ಕಪ್ಪು', ministry: 'ತಮಿಳುನಾಡು ಸರ್ಕಾರ', benefit: '₹2 ಲಕ್ಷ ವಿಮೆ', match: 92 },
   },
   cta: {
     heading: 'ನಿಮ್ಮ ಪ್ರಯೋಜನಗಳು ಕಾಯುತ್ತಿವೆ.',
@@ -633,6 +689,14 @@ const kn = {
 
 const gu = {
   nav: { home: 'હોમ', talkToAI: 'AI સાથે વાત કરો', schemes: 'યોજનાઓ', scanId: 'ID સ્કેન કરો', dashboard: 'ડેશબોર્ડ', speakNow: 'હવે બોલો' },
+  modeSelect: {
+    title: 'તમે કેવી રીતે આગળ વધવા માંગો છો?',
+    subtitle: 'તમારા માટે જે સરળ હોય તે પસંદ કરો',
+    textChatTitle: 'ટેક્સ્ટ ચેટ',
+    textChatDesc: 'ટાઇપ કરો અથવા બોલો, સ્ક્રીન પર પરિણામો જુઓ',
+    voiceOnlyTitle: 'ફક્ત-અવાજ મોડ',
+    voiceOnlyDesc: 'મોટા બટનો, બોલાયેલા જવાબો — સરળ ઉપયોગ માટે બનાવેલ',
+  },
   hero: {
     badge: '✦ હેકાથોન 3.0 — સામાજિક અસર માટે જનરેટિવ AI',
     titleLine1: 'એકવાર બોલો.',
@@ -683,10 +747,10 @@ const gu = {
     centralHeader: 'કેન્દ્ર સરકારની યોજનાઓ',
     stateHeader: 'તમિલનાડુ રાજ્યની યોજનાઓ',
     schemeCards: [
-      { name: 'PM-KISAN Samman Nidhi', ministry: 'કૃષિ મંત્રાલય', benefit: '₹6,000/વર્ષ', match: 95 },
-      { name: 'Ayushman Bharat PM-JAY', ministry: 'આરોગ્ય મંત્રાલય', benefit: '₹5 લાખ/વર્ષ આરોગ્ય', match: 88 },
+      { name: 'PM-KISAN Samman Nidhi', nameLocal: 'પીએમ-કિસાન સન્માન નિધિ', ministry: 'કૃષિ મંત્રાલય', benefit: '₹6,000/વર્ષ', match: 95 },
+      { name: 'Ayushman Bharat PM-JAY', nameLocal: 'આયુષ્માન ભારત પીએમ-જય', ministry: 'આરોગ્ય મંત્રાલય', benefit: '₹5 લાખ/વર્ષ આરોગ્ય', match: 88 },
     ],
-    stateScheme: { name: 'Uzhavar Pathukappu', ministry: 'તમિલનાડુ સરકાર', benefit: '₹2 લાખ વીમો', match: 92 },
+    stateScheme: { name: 'Uzhavar Pathukappu', nameLocal: 'ઉઝાવર પથુક્કપ્પુ', ministry: 'તમિલનાડુ સરકાર', benefit: '₹2 લાખ વીમો', match: 92 },
   },
   cta: {
     heading: 'તમારા લાભો રાહ જોઈ રહ્યા છે.',
@@ -721,6 +785,14 @@ const gu = {
 
 const ml = {
   nav: { home: 'ഹോം', talkToAI: 'AI-യുമായി സംസാരിക്കുക', schemes: 'പദ്ധതികൾ', scanId: 'ID സ്കാൻ ചെയ്യുക', dashboard: 'ഡാഷ്ബോർഡ്', speakNow: 'ഇപ്പോൾ സംസാരിക്കുക' },
+  modeSelect: {
+    title: 'നിങ്ങൾ എങ്ങനെ തുടരാൻ ആഗ്രഹിക്കുന്നു?',
+    subtitle: 'നിങ്ങൾക്ക് എളുപ്പമുള്ളത് തിരഞ്ഞെടുക്കൂ',
+    textChatTitle: 'ടെക്സ്റ്റ് ചാറ്റ്',
+    textChatDesc: 'ടൈപ്പ് ചെയ്യൂ അല്ലെങ്കിൽ സംസാരിക്കൂ, സ്ക്രീനിൽ ഫലങ്ങൾ കാണൂ',
+    voiceOnlyTitle: 'വോയ്സ്-മാത്രം മോഡ്',
+    voiceOnlyDesc: 'വലിയ ബട്ടണുകൾ, സംസാരിക്കുന്ന ഉത്തരങ്ങൾ — എളുപ്പമുള്ള ഉപയോഗത്തിനായി നിർമ്മിച്ചത്',
+  },
   hero: {
     badge: '✦ ഹാക്കത്തോൺ 3.0 — സാമൂഹിക പ്രഭാവത്തിനുള്ള ജനറേറ്റീവ് AI',
     titleLine1: 'ഒരിക്കൽ സംസാരിക്കൂ.',
@@ -771,10 +843,10 @@ const ml = {
     centralHeader: 'കേന്ദ്ര സർക്കാർ പദ്ധതികൾ',
     stateHeader: 'തമിഴ്‌നാട് സംസ്ഥാന പദ്ധതികൾ',
     schemeCards: [
-      { name: 'PM-KISAN Samman Nidhi', ministry: 'കൃഷി മന്ത്രാലയം', benefit: '₹6,000/വർഷം', match: 95 },
-      { name: 'Ayushman Bharat PM-JAY', ministry: 'ആരോഗ്യ മന്ത്രാലയം', benefit: '₹5 ലക്ഷം/വർഷം ആരോഗ്യം', match: 88 },
+      { name: 'PM-KISAN Samman Nidhi', nameLocal: 'പിഎം-കിസാൻ സമ്മാൻ നിധി', ministry: 'കൃഷി മന്ത്രാലയം', benefit: '₹6,000/വർഷം', match: 95 },
+      { name: 'Ayushman Bharat PM-JAY', nameLocal: 'ആയുഷ്മാൻ ഭാരത് പിഎം-ജെ', ministry: 'ആരോഗ്യ മന്ത്രാലയം', benefit: '₹5 ലക്ഷം/വർഷം ആരോഗ്യം', match: 88 },
     ],
-    stateScheme: { name: 'Uzhavar Pathukappu', ministry: 'തമിഴ്‌നാട് സർക്കാർ', benefit: '₹2 ലക്ഷം ഇൻഷുറൻസ്', match: 92 },
+    stateScheme: { name: 'Uzhavar Pathukappu', nameLocal: 'ഉഴവർ പതുക്കാപ്പു', ministry: 'തമിഴ്‌നാട് സർക്കാർ', benefit: '₹2 ലക്ഷം ഇൻഷുറൻസ്', match: 92 },
   },
   cta: {
     heading: 'നിങ്ങളുടെ ആനുകൂല്യങ്ങൾ കാത്തിരിക്കുന്നു.',
@@ -809,6 +881,14 @@ const ml = {
 
 const pa = {
   nav: { home: 'ਹੋਮ', talkToAI: 'AI ਨਾਲ ਗੱਲ ਕਰੋ', schemes: 'ਯੋਜਨਾਵਾਂ', scanId: 'ID ਸਕੈਨ ਕਰੋ', dashboard: 'ਡੈਸ਼ਬੋਰਡ', speakNow: 'ਹੁਣੇ ਬੋਲੋ' },
+  modeSelect: {
+    title: 'ਤੁਸੀਂ ਕਿਵੇਂ ਅੱਗੇ ਵਧਣਾ ਚਾਹੋਗੇ?',
+    subtitle: 'ਜੋ ਤੁਹਾਡੇ ਲਈ ਆਸਾਨ ਹੋਵੇ ਉਹ ਚੁਣੋ',
+    textChatTitle: 'ਟੈਕਸਟ ਚੈਟ',
+    textChatDesc: 'ਟਾਈਪ ਕਰੋ ਜਾਂ ਬੋਲੋ, ਸਕ੍ਰੀਨ ਤੇ ਨਤੀਜੇ ਵੇਖੋ',
+    voiceOnlyTitle: 'ਸਿਰਫ਼-ਆਵਾਜ਼ ਮੋਡ',
+    voiceOnlyDesc: 'ਵੱਡੇ ਬਟਨ, ਬੋਲੇ ਗਏ ਜਵਾਬ — ਸੌਖੀ ਵਰਤੋਂ ਲਈ ਬਣਾਇਆ ਗਿਆ',
+  },
   hero: {
     badge: '✦ ਹੈਕਾਥਾਨ 3.0 — ਸਮਾਜਿਕ ਪ੍ਰਭਾਵ ਲਈ ਜਨਰੇਟਿਵ AI',
     titleLine1: 'ਇੱਕ ਵਾਰ ਬੋਲੋ।',
@@ -859,10 +939,10 @@ const pa = {
     centralHeader: 'ਕੇਂਦਰ ਸਰਕਾਰ ਦੀਆਂ ਸਕੀਮਾਂ',
     stateHeader: 'ਤਮਿਲਨਾਡੂ ਰਾਜ ਦੀਆਂ ਸਕੀਮਾਂ',
     schemeCards: [
-      { name: 'PM-KISAN Samman Nidhi', ministry: 'ਖੇਤੀਬਾੜੀ ਮੰਤਰਾਲਾ', benefit: '₹6,000/ਸਾਲ', match: 95 },
-      { name: 'Ayushman Bharat PM-JAY', ministry: 'ਸਿਹਤ ਮੰਤਰਾਲਾ', benefit: '₹5 ਲੱਖ/ਸਾਲ ਸਿਹਤ', match: 88 },
+      { name: 'PM-KISAN Samman Nidhi', nameLocal: 'ਪੀਐਮ-ਕਿਸਾਨ ਸਨਮਾਨ ਨਿਧੀ', ministry: 'ਖੇਤੀਬਾੜੀ ਮੰਤਰਾਲਾ', benefit: '₹6,000/ਸਾਲ', match: 95 },
+      { name: 'Ayushman Bharat PM-JAY', nameLocal: 'ਆਯੁਸ਼ਮਾਨ ਭਾਰਤ ਪੀਐਮ-ਜੇ', ministry: 'ਸਿਹਤ ਮੰਤਰਾਲਾ', benefit: '₹5 ਲੱਖ/ਸਾਲ ਸਿਹਤ', match: 88 },
     ],
-    stateScheme: { name: 'Uzhavar Pathukappu', ministry: 'ਤਮਿਲਨਾਡੂ ਸਰਕਾਰ', benefit: '₹2 ਲੱਖ ਬੀਮਾ', match: 92 },
+    stateScheme: { name: 'Uzhavar Pathukappu', nameLocal: 'ਉਝਾਵਰ ਪਥੁੱਕੱਪੂ', ministry: 'ਤਮਿਲਨਾਡੂ ਸਰਕਾਰ', benefit: '₹2 ਲੱਖ ਬੀਮਾ', match: 92 },
   },
   cta: {
     heading: 'ਤੁਹਾਡੇ ਲਾਭ ਉਡੀਕ ਰਹੇ ਹਨ।',
@@ -897,6 +977,14 @@ const pa = {
 
 const ur = {
   nav: { home: 'ہوم', talkToAI: 'AI سے بات کریں', schemes: 'اسکیمیں', scanId: 'ID اسکین کریں', dashboard: 'ڈیش بورڈ', speakNow: 'ابھی بولیں' },
+  modeSelect: {
+    title: 'آپ کیسے آگے بڑھنا چاہیں گے؟',
+    subtitle: 'جو آپ کے لیے آسان ہو اسے منتخب کریں',
+    textChatTitle: 'ٹیکسٹ چیٹ',
+    textChatDesc: 'ٹائپ کریں یا بولیں، اسکرین پر نتائج دیکھیں',
+    voiceOnlyTitle: 'صرف آواز موڈ',
+    voiceOnlyDesc: 'بڑے بٹن، بولے گئے جوابات — آسان استعمال کے لیے بنایا گیا',
+  },
   hero: {
     badge: '✦ ہیکاتھون 3.0 — سماجی اثر کے لیے جنریٹو AI',
     titleLine1: 'ایک بار بولیں۔',
@@ -947,10 +1035,10 @@ const ur = {
     centralHeader: 'مرکزی حکومت کی اسکیمیں',
     stateHeader: 'تمل ناڈو ریاستی اسکیمیں',
     schemeCards: [
-      { name: 'PM-KISAN Samman Nidhi', ministry: 'وزارت زراعت', benefit: '₹6,000/سال', match: 95 },
-      { name: 'Ayushman Bharat PM-JAY', ministry: 'وزارت صحت', benefit: '₹5 لاکھ/سال صحت', match: 88 },
+      { name: 'PM-KISAN Samman Nidhi', nameLocal: 'پی ایم-کسان سمان ندھی', ministry: 'وزارت زراعت', benefit: '₹6,000/سال', match: 95 },
+      { name: 'Ayushman Bharat PM-JAY', nameLocal: 'آیوشمان بھارت پی ایم-جے', ministry: 'وزارت صحت', benefit: '₹5 لاکھ/سال صحت', match: 88 },
     ],
-    stateScheme: { name: 'Uzhavar Pathukappu', ministry: 'حکومت تمل ناڈو', benefit: '₹2 لاکھ بیمہ', match: 92 },
+    stateScheme: { name: 'Uzhavar Pathukappu', nameLocal: 'اوزاور پتھوکاپو', ministry: 'حکومت تمل ناڈو', benefit: '₹2 لاکھ بیمہ', match: 92 },
   },
   cta: {
     heading: 'آپ کے فوائد آپ کا انتظار کر رہے ہیں۔',
@@ -985,6 +1073,14 @@ const ur = {
 
 const or_ = {
   nav: { home: 'ହୋମ', talkToAI: 'AI ସହିତ କଥା ହୁଅନ୍ତୁ', schemes: 'ଯୋଜନା', scanId: 'ID ସ୍କାନ୍ କରନ୍ତୁ', dashboard: 'ଡ୍ୟାସବୋର୍ଡ', speakNow: 'ବର୍ତ୍ତମାନ କୁହନ୍ତୁ' },
+  modeSelect: {
+    title: 'ଆପଣ କିପରି ଆଗକୁ ବଢ଼ିବାକୁ ଚାହାଁନ୍ତି?',
+    subtitle: 'ଆପଣଙ୍କ ପାଇଁ ଯାହା ସହଜ ତାହା ବାଛନ୍ତୁ',
+    textChatTitle: 'ଟେକ୍ସଟ୍ ଚାଟ୍',
+    textChatDesc: 'ଟାଇପ୍ କରନ୍ତୁ କିମ୍ବା କୁହନ୍ତୁ, ସ୍କ୍ରିନରେ ଫଳାଫଳ ଦେଖନ୍ତୁ',
+    voiceOnlyTitle: 'କେବଳ-ସ୍ୱର ମୋଡ୍',
+    voiceOnlyDesc: 'ବଡ଼ ବଟନ୍, କୁହାଯାଇଥିବା ଉତ୍ତର — ସହଜ ବ୍ୟବହାର ପାଇଁ ତିଆରି',
+  },
   hero: {
     badge: '✦ ହ୍ୟାକାଥନ 3.0 — ସାମାଜିକ ପ୍ରଭାବ ପାଇଁ ଜେନେରେଟିଭ AI',
     titleLine1: 'ଥରେ କୁହନ୍ତୁ।',
@@ -1035,10 +1131,10 @@ const or_ = {
     centralHeader: 'କେନ୍ଦ୍ର ସରକାରଙ୍କ ଯୋଜନା',
     stateHeader: 'ତାମିଲନାଡୁ ରାଜ୍ୟ ଯୋଜନା',
     schemeCards: [
-      { name: 'PM-KISAN Samman Nidhi', ministry: 'କୃଷି ମନ୍ତ୍ରାଳୟ', benefit: '₹6,000/ବର୍ଷ', match: 95 },
-      { name: 'Ayushman Bharat PM-JAY', ministry: 'ସ୍ୱାସ୍ଥ୍ୟ ମନ୍ତ୍ରାଳୟ', benefit: '₹5 ଲକ୍ଷ/ବର୍ଷ ସ୍ୱାସ୍ଥ୍ୟ', match: 88 },
+      { name: 'PM-KISAN Samman Nidhi', nameLocal: 'ପିଏମ୍-କିଷାନ୍ ସମ୍ମାନ ନିଧି', ministry: 'କୃଷି ମନ୍ତ୍ରାଳୟ', benefit: '₹6,000/ବର୍ଷ', match: 95 },
+      { name: 'Ayushman Bharat PM-JAY', nameLocal: 'ଆୟୁଷ୍ମାନ ଭାରତ ପିଏମ୍-ଜେ', ministry: 'ସ୍ୱାସ୍ଥ୍ୟ ମନ୍ତ୍ରାଳୟ', benefit: '₹5 ଲକ୍ଷ/ବର୍ଷ ସ୍ୱାସ୍ଥ୍ୟ', match: 88 },
     ],
-    stateScheme: { name: 'Uzhavar Pathukappu', ministry: 'ତାମିଲନାଡୁ ସରକାର', benefit: '₹2 ଲକ୍ଷ ବୀମା', match: 92 },
+    stateScheme: { name: 'Uzhavar Pathukappu', nameLocal: 'ଉଝାଭର ପାଥୁକ୍କାପ୍ପୁ', ministry: 'ତାମିଲନାଡୁ ସରକାର', benefit: '₹2 ଲକ୍ଷ ବୀମା', match: 92 },
   },
   cta: {
     heading: 'ଆପଣଙ୍କ ସୁବିଧା ଅପେକ୍ଷାରେ ଅଛି।',
