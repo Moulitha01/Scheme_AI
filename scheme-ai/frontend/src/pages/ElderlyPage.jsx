@@ -63,32 +63,32 @@ export default function ElderlyPage() {
   }
 
   return (
-    <div style={{ fontFamily: 'Inter, sans-serif', minHeight: '100vh', background: '#f8f9fc' }}>
+    <div style={{ fontFamily: 'Inter, sans-serif', minHeight: '100vh', background: '#fff' }}>
 
       {/* Tricolor top */}
-      <div style={{ height: 5, display: 'flex' }}>
+      <div style={{ height: 4, display: 'flex' }}>
         <div style={{ flex: 1, background: '#FF6B00' }} />
-        <div style={{ flex: 1, background: '#fff', borderTop: '2px solid #eee' }} />
+        <div style={{ flex: 1, background: '#fff', borderTop: '1px solid #eee' }} />
         <div style={{ flex: 1, background: '#138808' }} />
       </div>
 
-      {/* Header */}
+      {/* Header — matches LandingPage navbar */}
       <div style={{
-        background: '#fff', borderBottom: '1px solid #f0f0f0',
-        padding: '14px 5%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+        background: '#fff', borderBottom: '1px solid #f0f0f0', position: 'sticky', top: 0, zIndex: 100,
+        padding: '0 5%', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        boxShadow: '0 1px 8px rgba(0,0,0,0.06)',
       }}>
         <button onClick={() => navigate('/')}
-          style={{ background: 'none', border: 'none', fontSize: 16, color: '#555', cursor: 'pointer', fontWeight: 500 }}>
+          style={{ background: 'none', border: 'none', fontSize: 14, color: '#555', cursor: 'pointer', fontWeight: 500 }}>
           ← {t('elderly.back', 'Back')}
         </button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{
-            width: 36, height: 36, borderRadius: 10,
+            width: 32, height: 32, borderRadius: 8,
             background: 'linear-gradient(135deg, #FF6B00, #FFAA00)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
           }}>🏛️</div>
-          <span style={{ fontWeight: 800, fontSize: 18 }}>Scheme<span style={{ color: '#FF6B00' }}>-AI</span></span>
+          <span style={{ fontWeight: 700, fontSize: 18 }}>Scheme<span style={{ color: '#FF6B00' }}>-AI</span></span>
         </div>
         <div style={{
           background: '#fff8f0', border: '1px solid #ffd0a0',
@@ -96,73 +96,81 @@ export default function ElderlyPage() {
         }}>🌐 {language.name}</div>
       </div>
 
-      {/* Language picker — now drives the SAME global language used everywhere else */}
-      <div style={{ background: '#fffbf5', borderBottom: '2px solid #ffe0b0', padding: '14px 5%' }}>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+      {/* ── Navy gradient hero — matches LandingPage hero ── */}
+      <section style={{
+        background: 'linear-gradient(135deg, #1a1050 0%, #2a1a80 40%, #1a56a0 100%)',
+        padding: '32px 5% 56px',
+      }}>
+        {/* Language pills — same treatment as the landing hero */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginBottom: 36 }}>
           {LANGUAGES.map(l => (
             <button key={l.code} onClick={() => setLanguage(l.code)}
               style={{
-                background: languageCode === l.code ? 'linear-gradient(135deg, #FF6B00, #FFAA00)' : '#fff',
-                color: languageCode === l.code ? '#fff' : '#333',
-                border: languageCode === l.code ? '2px solid #FF6B00' : '2px solid #e0e0e0',
-                borderRadius: 12, padding: '10px 18px', fontSize: 16, fontWeight: languageCode === l.code ? 700 : 500,
-                cursor: 'pointer', transition: 'all 0.2s',
-                boxShadow: languageCode === l.code ? '0 4px 12px rgba(255,107,0,0.3)' : '0 2px 6px rgba(0,0,0,0.05)',
-              }}>{l.name}</button>
+                background: languageCode === l.code ? 'rgba(255,170,0,0.25)' : 'rgba(255,255,255,0.08)',
+                color: languageCode === l.code ? '#FFAA00' : '#b0c4e8',
+                border: languageCode === l.code ? '1px solid rgba(255,170,0,0.4)' : '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 20, padding: '6px 16px', fontSize: 13,
+                fontWeight: languageCode === l.code ? 700 : 500, cursor: 'pointer', transition: 'all 0.2s',
+              }}>
+              {l.name}
+            </button>
           ))}
         </div>
-      </div>
 
-      <div style={{ maxWidth: 600, margin: '0 auto', padding: '32px 5%' }}>
-
-        {/* Greeting card */}
-        <div style={{
-          background: '#fff', border: '2px solid #ffd0a0', borderRadius: 24,
-          padding: 32, textAlign: 'center', marginBottom: 32,
-          boxShadow: '0 4px 20px rgba(255,107,0,0.1)',
-        }}>
-          <div style={{ fontSize: 60, marginBottom: 16 }}>🙏</div>
-          <h2 style={{ fontSize: 22, fontWeight: 800, color: '#FF6B00', margin: '0 0 12px' }}>
-            {t('elderly.greetingTitle', 'Welcome')}!
-          </h2>
-          <p style={{ fontSize: 17, color: '#555', margin: '0 0 16px', lineHeight: 1.6 }}>
-            {t('elderly.greetingBody', 'Press the microphone and tell us about yourself')}
-          </p>
+        {/* Glass greeting card — same treatment as the landing voice-demo card */}
+        <div style={{ maxWidth: 560, margin: '0 auto' }}>
           <div style={{
-            background: '#fff8f0', border: '1px solid #ffd0a0', borderRadius: 12,
-            padding: '12px 16px', fontSize: 15, color: '#a05000',
+            background: 'rgba(255,255,255,0.06)', backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255,255,255,0.12)', borderRadius: 20,
+            padding: '32px 28px', textAlign: 'center',
           }}>
-            💡 {t('elderly.trySaying', 'Try saying:')}<br />
-            <em style={{ color: '#FF6B00', fontWeight: 600 }}>
-              {t('elderly.example', 'Example: "My name is Raman, age 65, Tamil Nadu, farmer"')}
-            </em>
+            <div style={{ fontSize: 52, marginBottom: 12 }}>🙏</div>
+            <h2 style={{ fontSize: 24, fontWeight: 800, color: '#FFAA00', margin: '0 0 10px' }}>
+              {t('elderly.greetingTitle', 'Welcome')}!
+            </h2>
+            <p style={{ fontSize: 16, color: '#d0e4f8', margin: '0 0 18px', lineHeight: 1.6 }}>
+              {t('elderly.greetingBody', 'Press the microphone and tell us about yourself')}
+            </p>
+            <div style={{
+              background: 'rgba(255,255,255,0.08)', borderRadius: 12,
+              padding: '12px 16px', fontSize: 13, color: '#b0c4e8', lineHeight: 1.6,
+            }}>
+              💡 {t('elderly.trySaying', 'Try saying:')}<br />
+              <em style={{ color: '#FFAA00', fontWeight: 600 }}>
+                {t('elderly.example', 'Example: "My name is Raman, age 65, Tamil Nadu, farmer"')}
+              </em>
+            </div>
+
+            {/* Mic button */}
+            <div style={{ marginTop: 28 }}>
+              <button
+                onClick={recording ? () => { recognitionRef.current?.stop(); setRecording(false) } : startRecording}
+                style={{
+                  width: 120, height: 120, borderRadius: '50%',
+                  background: recording
+                    ? 'linear-gradient(135deg, #c0392b, #e74c3c)'
+                    : 'linear-gradient(135deg, #FF6B00, #FFAA00)',
+                  border: `4px solid ${recording ? 'rgba(231,76,60,0.4)' : 'rgba(255,170,0,0.35)'}`,
+                  fontSize: 48, cursor: 'pointer',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: recording
+                    ? '0 0 32px rgba(231,76,60,0.5)'
+                    : '0 8px 28px rgba(255,107,0,0.45)',
+                  transition: 'all 0.3s',
+                  animation: recording ? 'pulse 1s infinite' : 'none',
+                }}>
+                🎙️
+              </button>
+              <p style={{ fontSize: 16, fontWeight: 700, color: recording ? '#ff8a75' : '#FFAA00', marginTop: 14 }}>
+                {recording ? `🔴 ${t('elderly.listening', 'Listening...')}` : t('elderly.pressToSpeak', 'Press to speak')}
+              </p>
+            </div>
           </div>
         </div>
+      </section>
 
-        {/* Mic button */}
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <button
-            onClick={recording ? () => { recognitionRef.current?.stop(); setRecording(false) } : startRecording}
-            style={{
-              width: 160, height: 160, borderRadius: '50%',
-              background: recording
-                ? 'linear-gradient(135deg, #c0392b, #e74c3c)'
-                : 'linear-gradient(135deg, #1a7a4a, #27ae60)',
-              border: `6px solid ${recording ? '#f5b7b1' : '#a8e6c0'}`,
-              fontSize: 64, cursor: 'pointer',
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: recording
-                ? '0 0 40px rgba(231,76,60,0.5)'
-                : '0 8px 32px rgba(26,122,74,0.4)',
-              transition: 'all 0.3s',
-              animation: recording ? 'pulse 1s infinite' : 'none',
-            }}>
-            🎙️
-          </button>
-          <p style={{ fontSize: 20, fontWeight: 700, color: recording ? '#c0392b' : '#1a7a4a', marginTop: 16 }}>
-            {recording ? `🔴 ${t('elderly.listening', 'Listening...')}` : t('elderly.pressToSpeak', 'Press to speak')}
-          </p>
-        </div>
+      {/* ── Content below hero, light background like landing sections ── */}
+      <div style={{ maxWidth: 600, margin: '0 auto', padding: '32px 5%', background: '#fafafa' }}>
 
         {/* Transcript */}
         {transcript && (
@@ -185,7 +193,7 @@ export default function ElderlyPage() {
           </div>
         )}
 
-        {/* AI Reply */}
+        {/* AI Reply — navy gradient card, same treatment as landing's dark sections */}
         {reply && !loading && (
           <div style={{
             background: 'linear-gradient(135deg, #1a1050, #2a1a80)',
@@ -265,7 +273,7 @@ export default function ElderlyPage() {
 
         {/* Help line */}
         <div style={{
-          background: '#f8f9fc', border: '1px solid #e0e0e0', borderRadius: 14,
+          background: '#fff', border: '1px solid #e0e0e0', borderRadius: 14,
           padding: '16px 20px', textAlign: 'center', marginTop: 32,
           fontSize: 15, color: '#666', lineHeight: 1.6,
         }}>
@@ -273,9 +281,9 @@ export default function ElderlyPage() {
         </div>
       </div>
 
-      <div style={{ height: 5, display: 'flex' }}>
+      <div style={{ height: 4, display: 'flex' }}>
         <div style={{ flex: 1, background: '#FF6B00' }} />
-        <div style={{ flex: 1, background: '#fff', borderTop: '2px solid #eee' }} />
+        <div style={{ flex: 1, background: '#fff', borderTop: '1px solid #eee' }} />
         <div style={{ flex: 1, background: '#138808' }} />
       </div>
     </div>

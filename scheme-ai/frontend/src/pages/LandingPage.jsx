@@ -23,7 +23,6 @@ export default function LandingPage() {
   const samples = tList('hero.samples')
   const stats = tList('stats')
   const features = tList('features.items')
-  const steps = tList('howItWorks.steps')
 
   useEffect(() => {
     if (samples.length === 0) return
@@ -211,13 +210,13 @@ export default function LandingPage() {
               }}>
               {t('hero.startTalking')}
             </button>
-            <button onClick={() => navigate('/schemes')}
+            <button onClick={() => navigate('/elderly')}
               style={{
                 background: 'rgba(255,255,255,0.1)', color: '#fff',
                 border: '1px solid rgba(255,255,255,0.25)', borderRadius: 10,
                 padding: '14px 28px', fontSize: 15, fontWeight: 600, cursor: 'pointer',
               }}>
-              {t('hero.browseSchemes')}
+              {t('cta.voiceOnly')}
             </button>
           </div>
 
@@ -331,45 +330,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── How it works ── */}
-      <section style={{ padding: '60px 5%', background: '#fff' }}>
-        <div style={{ marginBottom: 8 }}>
-          <span style={{ fontSize: 11, color: '#FF6B00', fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase' }}>
-            {t('howItWorks.kicker')}
-          </span>
-        </div>
-        <h2 style={{ fontSize: 28, fontWeight: 700, color: '#1a1a2e', marginBottom: 40 }}>
-          {t('howItWorks.heading')}
-        </h2>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-          {steps.map((step, i) => {
-            const colors = ['#FF6B00', '#FFAA00', '#1a56a0', '#1a7a4a']
-            return (
-              <div key={i} style={{ display: 'flex', gap: 24, position: 'relative' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 48, flexShrink: 0 }}>
-                  <div style={{
-                    width: 40, height: 40, borderRadius: '50%',
-                    background: colors[i % colors.length], color: '#fff',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontWeight: 700, fontSize: 16, flexShrink: 0, zIndex: 1,
-                  }}>{i + 1}</div>
-                  {i < steps.length - 1 && (
-                    <div style={{ width: 2, flex: 1, background: '#f0f0f0', margin: '4px 0' }} />
-                  )}
-                </div>
-                <div style={{ paddingBottom: i < steps.length - 1 ? 32 : 0 }}>
-                  <h3 style={{ fontSize: 16, fontWeight: 600, color: '#1a1a2e', margin: '8px 0 6px' }}>
-                    {step.title}
-                  </h3>
-                  <p style={{ fontSize: 14, color: '#666', lineHeight: 1.6, margin: 0 }}>{step.desc}</p>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </section>
-
       {/* ── Live scheme preview ── */}
       <section style={{ padding: '60px 5%', background: '#f8f8ff' }}>
         <h2 style={{ fontSize: 28, fontWeight: 700, color: '#1a1a2e', marginBottom: 8 }}>
@@ -474,38 +434,6 @@ export default function LandingPage() {
               border: '1px solid #90d090',
             }}>{t('demo.stateScheme.match')}%</div>
           </div>
-        </div>
-      </section>
-
-      {/* ── CTA Section ── */}
-      <section style={{
-        background: 'linear-gradient(135deg, #1a1050, #2a1a80)',
-        padding: '60px 5%', textAlign: 'center',
-      }}>
-        <h2 style={{ fontSize: 32, fontWeight: 800, color: '#fff', marginBottom: 12 }}>
-          {t('cta.heading')}
-        </h2>
-        <p style={{ fontSize: 16, color: '#b0c4e8', marginBottom: 32, maxWidth: 480, margin: '0 auto 32px' }}>
-          {t('cta.subheading')}
-        </p>
-        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <button onClick={() => navigate('/chat')}
-            style={{
-              background: 'linear-gradient(135deg, #FF6B00, #FFAA00)',
-              color: '#fff', border: 'none', borderRadius: 12,
-              padding: '16px 32px', fontSize: 16, fontWeight: 700, cursor: 'pointer',
-              boxShadow: '0 4px 20px rgba(255,107,0,0.4)',
-            }}>
-            {t('cta.startTalking')}
-          </button>
-          <button onClick={() => navigate('/elderly')}
-            style={{
-              background: 'rgba(255,255,255,0.1)', color: '#fff',
-              border: '1px solid rgba(255,255,255,0.25)', borderRadius: 12,
-              padding: '16px 32px', fontSize: 16, fontWeight: 600, cursor: 'pointer',
-            }}>
-            {t('cta.voiceOnly')}
-          </button>
         </div>
       </section>
 
