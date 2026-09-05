@@ -3,15 +3,15 @@ import { createContext, useContext, useState, useEffect } from 'react'
 import { translations } from '../translations'
 
 export const LANGUAGES = [
-  { name: 'English', code: 'en' },
-  { name: 'हिन्दी', code: 'hi' },
   { name: 'தமிழ்', code: 'ta' },
+  { name: 'English', code: 'en' },
+  { name: 'മലയാളം', code: 'ml' },
   { name: 'తెలుగు', code: 'te' },
+  { name: 'हिन्दी', code: 'hi' },
   { name: 'বাংলা', code: 'bn' },
   { name: 'मराठी', code: 'mr' },
   { name: 'ಕನ್ನಡ', code: 'kn' },
   { name: 'ગુજરાતી', code: 'gu' },
-  { name: 'മലയാളം', code: 'ml' },
   { name: 'ਪੰਜਾਬੀ', code: 'pa' },
   { name: 'اردو', code: 'ur' },
   { name: 'ଓଡ଼ିଆ', code: 'or' },
@@ -29,10 +29,7 @@ export function LanguageProvider({ children }) {
   useEffect(() => {
     localStorage.setItem('schemeai_lang_code', langCode)
     document.documentElement.lang = langCode
-    // Note: not flipping document.dir for Urdu — our components aren't
-    // built for RTL yet, so a blanket dir="rtl" just scrambles the layout
-    // without actually rendering Urdu correctly. Revisit once Urdu has
-    // real translated copy and the components are RTL-tested.
+    document.documentElement.dir = langCode === 'ur' ? 'rtl' : 'ltr'
   }, [langCode])
 
   const language = LANGUAGES.find(l => l.code === langCode) || LANGUAGES[0]

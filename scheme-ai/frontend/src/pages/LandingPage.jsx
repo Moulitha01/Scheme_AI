@@ -10,15 +10,6 @@ export default function LandingPage() {
   const navigate = useNavigate()
   const { language, setLanguage, t, tList, LANGUAGES } = useLanguage()
   const [sampleIndex, setSampleIndex] = useState(0)
-  const [showModeSelect, setShowModeSelect] = useState(
-    () => typeof window !== 'undefined' && !sessionStorage.getItem('schemeai_mode_chosen')
-  )
-
-  const chooseMode = (mode) => {
-    sessionStorage.setItem('schemeai_mode_chosen', mode)
-    setShowModeSelect(false)
-    if (mode === 'voice') navigate('/elderly')
-  }
 
   const samples = tList('hero.samples')
   const stats = tList('stats')
@@ -36,73 +27,6 @@ export default function LandingPage() {
 
   return (
     <div style={{ fontFamily: 'Inter, sans-serif', background: '#fff', color: '#1a1a2e', overflowX: 'hidden' }}>
-
-      {/* ── Mode selector popup — shown once per session before anything else ── */}
-      {showModeSelect && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 1000,
-          background: 'rgba(15,10,40,0.72)', backdropFilter: 'blur(4px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
-        }}>
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 12 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ duration: 0.25 }}
-            style={{
-              background: '#fff', borderRadius: 24, padding: '36px 32px',
-              maxWidth: 480, width: '100%', textAlign: 'center',
-              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-            }}>
-            <div style={{
-              width: 44, height: 44, borderRadius: 10, margin: '0 auto 16px',
-              background: 'linear-gradient(135deg, #FF6B00, #FFAA00)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20,
-            }}>🏛️</div>
-            <h2 style={{ fontSize: 22, fontWeight: 800, color: '#1a1a2e', margin: '0 0 8px' }}>
-              {t('modeSelect.title')}
-            </h2>
-            <p style={{ fontSize: 14, color: '#888', margin: '0 0 28px' }}>
-              {t('modeSelect.subtitle')}
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <button onClick={() => chooseMode('text')}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 14, textAlign: 'left',
-                  background: '#fff8f0', border: '2px solid #ffd0a0', borderRadius: 16,
-                  padding: '16px 18px', cursor: 'pointer',
-                }}>
-                <span style={{ fontSize: 30 }}>💬</span>
-                <span>
-                  <span style={{ display: 'block', fontSize: 16, fontWeight: 700, color: '#a05000' }}>
-                    {t('modeSelect.textChatTitle')}
-                  </span>
-                  <span style={{ display: 'block', fontSize: 13, color: '#a06a30', marginTop: 2 }}>
-                    {t('modeSelect.textChatDesc')}
-                  </span>
-                </span>
-              </button>
-
-              <button onClick={() => chooseMode('voice')}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 14, textAlign: 'left',
-                  background: 'linear-gradient(135deg, #1a1050, #2a1a80)', border: '2px solid transparent',
-                  borderRadius: 16, padding: '16px 18px', cursor: 'pointer',
-                }}>
-                <span style={{ fontSize: 30 }}>🎙️</span>
-                <span>
-                  <span style={{ display: 'block', fontSize: 16, fontWeight: 700, color: '#fff' }}>
-                    {t('modeSelect.voiceOnlyTitle')}
-                  </span>
-                  <span style={{ display: 'block', fontSize: 13, color: '#b0c4e8', marginTop: 2 }}>
-                    {t('modeSelect.voiceOnlyDesc')}
-                  </span>
-                </span>
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
 
       {/* ── Tricolor top strip ── */}
       <div style={{ height: 4, display: 'flex' }}>
