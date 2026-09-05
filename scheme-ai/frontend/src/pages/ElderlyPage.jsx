@@ -74,7 +74,7 @@ export default function ElderlyPage() {
 
       {/* Header — matches LandingPage navbar */}
       <div style={{
-        background: '#fff', borderBottom: '1px solid #f0f0f0', position: 'sticky', top: 0, zIndex: 100,
+        background: '#f8f1f1', borderBottom: '1px solid #f0f0f0', position: 'sticky', top: 0, zIndex: 100,
         padding: '0 5%', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         boxShadow: '0 1px 8px rgba(0,0,0,0.06)',
       }}>
@@ -88,10 +88,13 @@ export default function ElderlyPage() {
             background: 'linear-gradient(135deg, #FF6B00, #FFAA00)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
           }}>🏛️</div>
-          <span style={{ fontWeight: 700, fontSize: 18 }}>Scheme<span style={{ color: '#FF6B00' }}>-AI</span></span>
-        </div>
+          <span style={{ fontWeight: 700, fontSize: 18, color: '#000' }}>
+            Scheme
+          <span style={{ color: ' #FF6B00' }}>-AI</span>
+          </span> 
+          </div>
         <div style={{
-          background: '#fff8f0', border: '1px solid #ffd0a0',
+          background: '#f8f1ea', border: '1px solid #ffd0a0',
           borderRadius: 20, padding: '6px 14px', fontSize: 13, color: '#FF6B00', fontWeight: 600,
         }}>🌐 {language.name}</div>
       </div>
