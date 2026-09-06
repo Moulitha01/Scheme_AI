@@ -29,7 +29,11 @@ export function LanguageProvider({ children }) {
   useEffect(() => {
     localStorage.setItem('schemeai_lang_code', langCode)
     document.documentElement.lang = langCode
-    document.documentElement.dir = langCode === 'ur' ? 'rtl' : 'ltr'
+    // NOTE: intentionally NOT setting document.documentElement.dir = 'rtl' for Urdu.
+    // None of this app's layouts are built RTL-aware, so flipping the document
+    // direction mirrors the entire page (navbar, buttons, flex order) rather than
+    // just the text. Urdu text itself still renders right-to-left correctly at
+    // the character level via the Unicode bidi algorithm without this.
   }, [langCode])
 
   const language = LANGUAGES.find(l => l.code === langCode) || LANGUAGES[0]
