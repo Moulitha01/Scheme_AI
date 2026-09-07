@@ -2,7 +2,7 @@
 import express from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { Session, Scheme } from '../models/index.js'
-import { extractProfile, generateAIReply, scoreEligibility } from '../services/gemini.js'
+import { extractProfile, generateAIReply, scoreEligibility, translateSchemeFields } from '../services/gemini.js'
 import { semanticSearch, mongoTextSearch } from '../services/rag.js'
 import { extractProfileFromText, matchSchemesByProfile } from '../services/profileExtractor.js'
 import { logger } from '../utils/logger.js'
@@ -101,7 +101,8 @@ router.post('/message', async (req, res) => {
 
     let centralSchemes = matchSchemesByProfile(schemesForScoring, mergedProfile, message).slice(0, 3)
 
-    // Groq scoring
+    // Groq scoring — now passes `language` so the "reason" comes back
+    // already written in the user's chosen language.
     try {
       const enhanced = await Promise.all(
         centralSchemes.map(async (s) => {
@@ -110,7 +111,7 @@ router.post('/message', async (req, res) => {
               name: s.name,
               description: s.description || '',
               eligibility: Array.isArray(s.eligibilityCriteria) ? s.eligibilityCriteria : [],
-            })
+            }, language)
             return {
               ...s,
               matchScore: Math.max(scored.score || 0, s.matchScore || 0),
@@ -151,9 +152,20 @@ router.post('/message', async (req, res) => {
       return true
     })
 
-    const topSchemes = deduped
+    let topSchemes = deduped
 
-    // Generate reply
+    // ── Step 4: Translate scheme name/ministry/benefit into the
+    // user's chosen language (no-op + zero cost when language is
+    // English). Falls back to English silently if the Groq call
+    // fails, so a translation hiccup never breaks the response. ──
+    try {
+      topSchemes = await translateSchemeFields(topSchemes, language)
+    } catch (err) {
+      logger.warn(`Scheme translation skipped: ${err.message}`)
+    }
+
+    // Generate reply — uses the already-translated scheme names so
+    // the AI's spoken/written reply matches what's shown in the cards.
     let reply = ''
     try {
       reply = await generateAIReply({

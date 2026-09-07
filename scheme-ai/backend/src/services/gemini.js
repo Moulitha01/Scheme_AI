@@ -1,11 +1,11 @@
 // backend/src/services/gemini.js
-// Drop-in Groq replacement — same exports as before, nothing else changes
+// Drop-in Groq replacement — same exports as before, plus scheme-field translation
 import Groq from 'groq-sdk'
 import { logger } from '../utils/logger.js'
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
 
-const MODEL = 'llama-3.3-70b-versatile' // best free model on Groq
+const MODEL = 'openai/gpt-oss-120b' // best free model on Groq
 
 // ── Helper: call Groq with retry ──────────────────────────────
 async function callGroq(messages, { temperature = 0.3, maxTokens = 512 } = {}) {
@@ -31,7 +31,7 @@ async function callGroq(messages, { temperature = 0.3, maxTokens = 512 } = {}) {
   }
 }
 
-// ── Helper: extract JSON from text ───────────────────────────
+// ── Helper: extract JSON object from text ─────────────────────
 function extractJSON(text) {
   try {
     const clean = text.replace(/```json|```/g, '').trim()
@@ -39,6 +39,32 @@ function extractJSON(text) {
     if (match) return JSON.parse(match[0])
   } catch { /* ignore */ }
   return null
+}
+
+// ── Helper: extract JSON array from text ──────────────────────
+function extractJSONArray(text) {
+  try {
+    const clean = text.replace(/```json|```/g, '').trim()
+    const match = clean.match(/\[[\s\S]*\]/)
+    if (match) return JSON.parse(match[0])
+  } catch { /* ignore */ }
+  return null
+}
+
+// ── Per-language fallback strings (used only if Groq call fails) ──
+const FALLBACK_REASONS = {
+  Tamil:   'தகுதி இருக்கலாம் — அதிகாரப்பூர்வ போர்ட்டலில் சரிபார்க்கவும்',
+  Hindi:   'पात्र हो सकते हैं — आधिकारिक पोर्टल पर सत्यापित करें',
+  Telugu:  'అర్హత ఉండవచ్చు — అధికారిక పోర్టల్‌లో ధృవీకరించండి',
+  Kannada: 'ಅರ್ಹತೆ ಇರಬಹುದು — ಅಧಿಕೃತ ಪೋರ್ಟಲ್‌ನಲ್ಲಿ ಪರಿಶೀಲಿಸಿ',
+  Bengali: 'যোগ্য হতে পারেন — অফিসিয়াল পোর্টালে যাচাই করুন',
+  Marathi: 'पात्र असू शकता — अधिकृत पोर्टलवर तपासा',
+  Gujarati:'પાત્ર હોઈ શકો છો — સત્તાવાર પોર્ટલ પર ચકાસો',
+  Malayalam:'യോഗ്യത ഉണ്ടാകാം — ഔദ്യോഗിക പോർട്ടലിൽ പരിശോധിക്കുക',
+  Punjabi: 'ਯੋਗ ਹੋ ਸਕਦੇ ਹੋ — ਅਧਿਕਾਰਤ ਪੋਰਟਲ ਤੇ ਪੁਸ਼ਟੀ ਕਰੋ',
+  Urdu:    'اہل ہو سکتے ہیں — آفیشل پورٹل پر تصدیق کریں',
+  Odia:    'ଯୋଗ୍ୟ ହୋଇପାରନ୍ତି — ସରକାରୀ ପୋର୍ଟାଲରେ ଯାଞ୍ଚ କରନ୍ତୁ',
+  English: 'Likely eligible — verify at official portal',
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -134,36 +160,95 @@ function getFallbackReply(language, count, name) {
 
 // ─────────────────────────────────────────────────────────────
 // LAYER 3 — Eligibility Scorer
+// Now takes `language` so the "reason" comes back already
+// written in the user's chosen language — no separate
+// translation pass needed for this field.
 // ─────────────────────────────────────────────────────────────
-export const scoreEligibility = async (userProfile, scheme) => {
+export const scoreEligibility = async (userProfile, scheme, language = 'English') => {
   try {
     const text = await callGroq([
       {
         role: 'system',
         content: `You are an eligibility scorer for Indian government schemes.
 Score from 0-100. Be GENEROUS — incomplete profile = assume best case, minimum 45.
-Return ONLY JSON: {"score": number, "reason": "one short sentence"}`,
+Write the "reason" as one short, simple sentence in ${language} language (not English, unless ${language} is English).
+Return ONLY JSON: {"score": number, "reason": "one short sentence in ${language}"}`,
       },
       {
         role: 'user',
         content: `Profile: ${JSON.stringify(userProfile)}
 Scheme: ${scheme.name}
 Eligibility criteria: ${Array.isArray(scheme.eligibility) ? scheme.eligibility.join(', ') : scheme.eligibility}
-Return ONLY JSON:`,
+Return ONLY JSON, with "reason" written in ${language}:`,
       },
-    ], { temperature: 0.1, maxTokens: 100 })
+    ], { temperature: 0.2, maxTokens: 120 })
 
     const parsed = extractJSON(text)
     if (parsed?.score !== undefined) {
       return {
         score: Math.max(parsed.score, 40),
-        reason: parsed.reason || 'Likely eligible based on your profile',
+        reason: parsed.reason || (FALLBACK_REASONS[language] || FALLBACK_REASONS.English),
       }
     }
-    return { score: 65, reason: 'Likely eligible — verify at official portal' }
+    return { score: 65, reason: FALLBACK_REASONS[language] || FALLBACK_REASONS.English }
   } catch (err) {
     logger.error(`[Groq] Score error: ${err.message}`)
-    return { score: 65, reason: 'Likely eligible — verify at official portal' }
+    return { score: 65, reason: FALLBACK_REASONS[language] || FALLBACK_REASONS.English }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// NEW — Scheme field translator
+// Batches all matched schemes into ONE Groq call and translates
+// their name / ministry / benefit into the user's chosen language.
+// Skips the call entirely when language is English (no-op, no cost).
+// If translation fails for any reason, returns the original
+// (English) schemes untouched — the UI never breaks, it just
+// falls back to English for that turn.
+// ─────────────────────────────────────────────────────────────
+export const translateSchemeFields = async (schemes, language = 'English') => {
+  if (!schemes?.length || language === 'English') return schemes
+
+  try {
+    const payload = schemes.map((s, i) => ({
+      i,
+      name: s.name,
+      ministry: s.ministry,
+      benefit: s.benefit,
+    }))
+
+    const text = await callGroq([
+      {
+        role: 'system',
+        content: `You translate Indian government welfare scheme details into ${language} for elderly, low-literacy readers.
+Translate "name", "ministry", and "benefit" naturally into ${language}.
+Keep ₹ amounts exactly as given. If a scheme name is a widely-recognized official abbreviation (like PM-KISAN, PM-JAY, BPL), you may keep that abbreviation but still translate any surrounding descriptive words.
+Return ONLY a JSON array, same length and same order as the input, in this exact shape:
+[{"i": number, "name": "...", "ministry": "...", "benefit": "..."}]
+No markdown, no explanation, no extra text.`,
+      },
+      {
+        role: 'user',
+        content: `Schemes:\n${JSON.stringify(payload)}\n\nReturn ONLY the JSON array, translated into ${language}:`,
+      },
+    ], { temperature: 0.2, maxTokens: 1000 })
+
+    const parsed = extractJSONArray(text)
+    if (!Array.isArray(parsed) || parsed.length === 0) return schemes
+
+    return schemes.map((s, idx) => {
+      const match = parsed.find(p => p.i === idx) || parsed[idx]
+      if (!match) return s
+      return {
+        ...s,
+        name: match.name || s.name,
+        ministry: match.ministry || s.ministry,
+        benefit: match.benefit || s.benefit,
+      }
+    })
+  } catch (err) {
+    logger.error(`[Groq] Scheme translation error: ${err.message}`)
+    return schemes // fail safe — English fallback, never a broken response
   }
 }
 

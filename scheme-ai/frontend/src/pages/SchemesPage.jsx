@@ -2,8 +2,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
+import { useLanguage } from '../context/LanguageContext'
 
-const CATEGORIES = ['All', 'Agriculture', 'Education', 'Health', 'Housing', 'Women & Child', 'Finance', 'Employment', 'Disability']
+const CATEGORY_KEYS = ['All', 'Agriculture', 'Education', 'Health', 'Housing', 'Women & Child', 'Finance', 'Employment', 'Disability']
 
 const STATES = [
   'All States', 'Central', 'Tamil Nadu', 'Kerala', 'Karnataka', 'Andhra Pradesh',
@@ -24,6 +25,7 @@ const CAT_COLORS = {
 
 export default function SchemesPage() {
   const navigate = useNavigate()
+  const { t } = useLanguage()
   const [schemes, setSchemes] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -59,6 +61,11 @@ export default function SchemesPage() {
     fetchSchemes()
   }
 
+  // "All States" is stored/queried in English (state === 'All States' comparisons
+  // elsewhere and the backend param), but displayed translated in the dropdown.
+  const stateLabel = (s) => (s === 'All States' ? t('schemes.allStates', 'All States') : s)
+  const categoryLabel = (c) => t(`schemes.categories.${c}`, c)
+
   return (
     <div style={{ fontFamily: 'Inter, sans-serif', background: '#f8f9fc', minHeight: '100vh', color: '#1a1a2e' }}>
 
@@ -69,16 +76,26 @@ export default function SchemesPage() {
         <div style={{ flex: 1, background: '#138808' }} />
       </div>
 
-      {/* Hero */}
+      {/* Hero — same 3-stop navy gradient as LandingPage/DashboardPage */}
       <div style={{
-        background: 'linear-gradient(135deg, #1a1050, #2a1a80)',
-        padding: '40px 5%', textAlign: 'center',
+        background: 'linear-gradient(135deg, #1a1050 0%, #2a1a80 40%, #1a56a0 100%)',
+        padding: '40px 5%', textAlign: 'center', position: 'relative',
       }}>
+        <button onClick={() => navigate(-1)}
+          style={{
+            position: 'absolute', top: 20, left: '5%',
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+            color: '#b0c4e8', borderRadius: 8, padding: '6px 12px', fontSize: 13,
+            cursor: 'pointer',
+          }}>
+          ← {t('elderly.back', 'Back')}
+        </button>
         <h1 style={{ fontSize: 32, fontWeight: 800, color: '#fff', margin: '0 0 8px' }}>
-          Browse All Government Schemes
+          {t('schemes.title', 'Browse All Government Schemes')}
         </h1>
         <p style={{ fontSize: 15, color: '#b0c4e8', margin: '0 0 24px' }}>
-          {total.toLocaleString()}+ central and state schemes — search by name, category or state
+          {total.toLocaleString()}+ {t('schemes.subtitle', 'central and state schemes — search by name, category or state')}
         </p>
 
         {/* Search bar */}
@@ -86,7 +103,7 @@ export default function SchemesPage() {
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search schemes e.g. PM-KISAN, scholarship, housing..."
+            placeholder={t('schemes.searchPlaceholder', 'Search schemes e.g. PM-KISAN, scholarship, housing...')}
             style={{
               flex: 1, padding: '12px 16px', borderRadius: 10, border: 'none',
               fontSize: 14, background: 'rgba(255,255,255,0.95)',
@@ -97,7 +114,7 @@ export default function SchemesPage() {
             background: 'linear-gradient(135deg, #FF6B00, #FFAA00)',
             color: '#fff', border: 'none', borderRadius: 10,
             padding: '12px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-          }}>Search</button>
+          }}>{t('schemes.searchButton', 'Search')}</button>
         </form>
       </div>
 
@@ -106,7 +123,7 @@ export default function SchemesPage() {
         <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap', alignItems: 'center' }}>
           {/* Category filter */}
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {CATEGORIES.map(cat => (
+            {CATEGORY_KEYS.map(cat => (
               <button key={cat}
                 onClick={() => { setCategory(cat); setPage(1) }}
                 style={{
@@ -116,7 +133,7 @@ export default function SchemesPage() {
                   borderRadius: 20, padding: '6px 14px', fontSize: 13,
                   fontWeight: category === cat ? 600 : 400, cursor: 'pointer',
                 }}>
-                {cat !== 'All' && CAT_ICONS[cat]} {cat}
+                {cat !== 'All' && CAT_ICONS[cat]} {categoryLabel(cat)}
               </button>
             ))}
           </div>
@@ -130,33 +147,33 @@ export default function SchemesPage() {
               fontSize: 13, color: '#333', background: '#fff', cursor: 'pointer',
               marginLeft: 'auto',
             }}>
-            {STATES.map(s => <option key={s}>{s}</option>)}
+            {STATES.map(s => <option key={s} value={s}>{stateLabel(s)}</option>)}
           </select>
         </div>
 
         {/* Results count */}
         <p style={{ fontSize: 13, color: '#888', marginBottom: 16 }}>
-          Showing {schemes.length} of {total.toLocaleString()} schemes
-          {category !== 'All' && ` in ${category}`}
-          {state !== 'All States' && ` for ${state}`}
+          {t('schemes.showing', 'Showing')} {schemes.length} {t('schemes.of', 'of')} {total.toLocaleString()} {t('schemes.schemesWord', 'schemes')}
+          {category !== 'All' && ` ${t('schemes.inWord', 'in')} ${categoryLabel(category)}`}
+          {state !== 'All States' && ` ${t('schemes.forWord', 'for')} ${stateLabel(state)}`}
         </p>
 
         {/* Scheme grid */}
         {loading ? (
           <div style={{ textAlign: 'center', padding: 60 }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
-            <p style={{ color: '#888' }}>Loading schemes...</p>
+            <p style={{ color: '#888' }}>{t('schemes.loading', 'Loading schemes...')}</p>
           </div>
         ) : schemes.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 60 }}>
             <div style={{ fontSize: 48, marginBottom: 12 }}>🔍</div>
-            <p style={{ color: '#888', fontSize: 16 }}>No schemes found. Try different filters.</p>
+            <p style={{ color: '#888', fontSize: 16 }}>{t('schemes.noResults', 'No schemes found. Try different filters.')}</p>
             <button onClick={() => { setCategory('All'); setState('All States'); setSearch(''); setPage(1) }}
               style={{
                 background: '#FF6B00', color: '#fff', border: 'none',
                 borderRadius: 8, padding: '10px 20px', marginTop: 12, cursor: 'pointer',
               }}>
-              Clear filters
+              {t('schemes.clearFilters', 'Clear filters')}
             </button>
           </div>
         ) : (
@@ -188,7 +205,7 @@ export default function SchemesPage() {
                         WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
                       }}>{scheme.name}</h3>
                       <p style={{ fontSize: 12, color, margin: 0, fontWeight: 500 }}>
-                        {scheme.ministry || 'Government of India'}
+                        {scheme.ministry || t('schemes.govtOfIndia', 'Government of India')}
                       </p>
                     </div>
                   </div>
@@ -198,7 +215,7 @@ export default function SchemesPage() {
                       background: '#f0faf0', border: '1px solid #c0e8c0',
                       borderRadius: 8, padding: '8px 12px', marginBottom: 12,
                     }}>
-                      <p style={{ fontSize: 11, color: '#888', margin: '0 0 2px' }}>BENEFIT</p>
+                      <p style={{ fontSize: 11, color: '#888', margin: '0 0 2px' }}>{t('schemes.benefit', 'BENEFIT')}</p>
                       <p style={{ fontSize: 13, fontWeight: 600, color: '#1a7a1a', margin: 0 }}>
                         ✓ {scheme.benefit}
                       </p>
@@ -210,20 +227,20 @@ export default function SchemesPage() {
                       background: `${color}15`, color, fontSize: 11,
                       fontWeight: 600, padding: '3px 10px', borderRadius: 20,
                       border: `1px solid ${color}30`,
-                    }}>{scheme.category || 'Other'}</span>
+                    }}>{categoryLabel(scheme.category || 'Other')}</span>
                     <span style={{
                       background: isState ? '#f0fff5' : '#fff8f0',
                       color: isState ? '#1a7a4a' : '#a05000',
                       fontSize: 11, fontWeight: 600, padding: '3px 10px',
                       borderRadius: 20, border: `1px solid ${isState ? '#90d0a0' : '#ffd0a0'}`,
                     }}>
-                      {isState ? `🗺️ ${scheme.state}` : '🏛️ Central'}
+                      {isState ? `🗺️ ${scheme.state}` : `🏛️ ${t('schemes.central', 'Central')}`}
                     </span>
                     {scheme.applyLink && (
                       <a href={scheme.applyLink} target="_blank" rel="noreferrer"
                         style={{ marginLeft: 'auto', fontSize: 12, color: '#1a56a0', fontWeight: 600 }}
                         onClick={e => e.stopPropagation()}>
-                        Apply →
+                        {t('schemes.apply', 'Apply →')}
                       </a>
                     )}
                   </div>
@@ -244,9 +261,9 @@ export default function SchemesPage() {
                 color: page === 1 ? '#aaa' : '#333',
                 border: '1px solid #e0e0e0', borderRadius: 8,
                 padding: '8px 16px', cursor: page === 1 ? 'default' : 'pointer',
-              }}>← Prev</button>
+              }}>{t('schemes.prev', '← Prev')}</button>
             <span style={{ padding: '8px 16px', fontSize: 13, color: '#555' }}>
-              Page {page} of {Math.ceil(total / 12)}
+              {t('schemes.page', 'Page')} {page} {t('schemes.of', 'of')} {Math.ceil(total / 12)}
             </span>
             <button
               onClick={() => setPage(p => p + 1)}
@@ -256,18 +273,18 @@ export default function SchemesPage() {
                 color: page >= Math.ceil(total / 12) ? '#aaa' : '#fff',
                 border: 'none', borderRadius: 8,
                 padding: '8px 16px', cursor: page >= Math.ceil(total / 12) ? 'default' : 'pointer',
-              }}>Next →</button>
+              }}>{t('schemes.next', 'Next →')}</button>
           </div>
         )}
       </div>
 
-      {/* Bottom CTA */}
+      {/* Bottom CTA — same 3-stop navy gradient as LandingPage/DashboardPage */}
       <div style={{
-        background: 'linear-gradient(135deg, #1a1050, #2a1a80)',
+        background: 'linear-gradient(135deg, #1a1050 0%, #2a1a80 40%, #1a56a0 100%)',
         padding: '32px 5%', textAlign: 'center', marginTop: 40,
       }}>
         <p style={{ color: '#b0c4e8', fontSize: 15, margin: '0 0 16px' }}>
-          Not sure which scheme you qualify for?
+          {t('schemes.ctaQuestion', 'Not sure which scheme you qualify for?')}
         </p>
         <button onClick={() => navigate('/chat')}
           style={{
@@ -275,7 +292,7 @@ export default function SchemesPage() {
             color: '#fff', border: 'none', borderRadius: 10,
             padding: '14px 28px', fontSize: 15, fontWeight: 700, cursor: 'pointer',
           }}>
-          🎙️ Talk to AI — find your schemes
+          {t('schemes.ctaButton', '🎙️ Talk to AI — find your schemes')}
         </button>
       </div>
 

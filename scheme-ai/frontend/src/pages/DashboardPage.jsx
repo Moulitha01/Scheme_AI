@@ -32,24 +32,27 @@ export default function DashboardPage() {
 
   return (
     <div style={{ fontFamily: 'Inter, sans-serif', minHeight: '100vh', background: '#f8f9fc' }}>
-      {/* Tricolor */}
-      <div style={{ height: 5, display: 'flex' }}>
+      {/* Tricolor top */}
+      <div style={{ height: 4, display: 'flex' }}>
         <div style={{ flex: 1, background: '#FF6B00' }} />
-        <div style={{ flex: 1, background: '#fff', borderTop: '2px solid #eee' }} />
+        <div style={{ flex: 1, background: '#fff', borderTop: '1px solid #eee' }} />
         <div style={{ flex: 1, background: '#138808' }} />
       </div>
 
-      <div style={{ padding: '32px 5%' }}>
-        {/* Header */}
-        <div style={{ marginBottom: 32 }}>
-          <h1 style={{ fontSize: 28, fontWeight: 800, color: '#1a1a2e', margin: '0 0 6px' }}>
-            {t('dashboard.title', 'My Dashboard')}
-          </h1>
-          <p style={{ fontSize: 15, color: '#888', margin: 0 }}>
-            {t('dashboard.subtitle', 'Track your scheme applications and discoveries')}
-          </p>
-        </div>
+      {/* Hero — same navy gradient treatment as LandingPage / SchemesPage */}
+      <div style={{
+        background: 'linear-gradient(135deg, #1a1050 0%, #2a1a80 40%, #1a56a0 100%)',
+        padding: '40px 5%', textAlign: 'center',
+      }}>
+        <h1 style={{ fontSize: 32, fontWeight: 800, color: '#fff', margin: '0 0 8px' }}>
+          {t('dashboard.title', 'My Dashboard')}
+        </h1>
+        <p style={{ fontSize: 15, color: '#b0c4e8', margin: 0 }}>
+          {t('dashboard.subtitle', 'Track your scheme applications and discoveries')}
+        </p>
+      </div>
 
+      <div style={{ padding: '32px 5%' }}>
         {/* Stats row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 32 }}>
           {[
@@ -71,11 +74,12 @@ export default function DashboardPage() {
           {['schemes', 'profile'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)}
               style={{
-                background: activeTab === tab ? '#FF6B00' : '#fff',
+                background: activeTab === tab ? 'linear-gradient(135deg, #FF6B00, #FFAA00)' : '#fff',
                 color: activeTab === tab ? '#fff' : '#555',
                 border: activeTab === tab ? 'none' : '1px solid #e0e0e0',
                 borderRadius: 10, padding: '10px 22px', fontSize: 14,
                 fontWeight: activeTab === tab ? 700 : 400, cursor: 'pointer',
+                boxShadow: activeTab === tab ? '0 4px 16px rgba(255,107,0,0.3)' : 'none',
               }}>
               {tab === 'schemes' ? t('dashboard.mySchemes', '📋 My Schemes') : t('dashboard.myProfile', '👤 My Profile')}
             </button>
@@ -132,9 +136,10 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <div style={{ height: 5, display: 'flex' }}>
+      {/* Tricolor bottom */}
+      <div style={{ height: 4, display: 'flex' }}>
         <div style={{ flex: 1, background: '#FF6B00' }} />
-        <div style={{ flex: 1, background: '#fff', borderTop: '2px solid #eee' }} />
+        <div style={{ flex: 1, background: '#fff', borderTop: '1px solid #eee' }} />
         <div style={{ flex: 1, background: '#138808' }} />
       </div>
     </div>
