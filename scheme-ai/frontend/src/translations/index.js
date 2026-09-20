@@ -3,7 +3,7 @@
 // Old flow was 1 + 3 + 1 + 1 = 6, which hit Groq rate limits and felt slow.
 import express from 'express'
 import { v4 as uuidv4 } from 'uuid'
-import { Session, Scheme } from '../models/index.js'
+import { Session, Scheme } from '../translations/index.js'
 import { understand } from '../services/understand.js'
 import { searchSchemes, findSchemeByName } from '../services/search.js'
 import { generateGroundedReply, localizeSchemes, cleanForSpeech, LANG_CODE } from '../services/llm.js'
