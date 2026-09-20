@@ -1,207 +1,174 @@
-// backend/src/routes/chat.js
+// backend/src/routes/chat.js  (REPLACE)
+// LLM calls per message: understand (1) + localize (1, non-English only) + reply (1)
+// Old flow was 1 + 3 + 1 + 1 = 6, which hit Groq rate limits and felt slow.
 import express from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { Session, Scheme } from '../models/index.js'
-import { extractProfile, generateAIReply, scoreEligibility, translateSchemeFields } from '../services/gemini.js'
-import { semanticSearch, mongoTextSearch } from '../services/rag.js'
-import { extractProfileFromText, matchSchemesByProfile } from '../services/profileExtractor.js'
+import { understand } from '../services/understand.js'
+import { searchSchemes, findSchemeByName } from '../services/search.js'
+import { generateGroundedReply, localizeSchemes, cleanForSpeech } from '../services/llm.js'
+import { extractProfileFromText, matchSchemesByProfile, mergeProfile } from '../services/profileExtractor.js'
 import { logger } from '../utils/logger.js'
 
 const router = express.Router()
 
 const FALLBACK_REPLIES = {
-  Tamil:   (n, name) => `${name ? name + 'க்கு வணக்கம்! ' : 'வணக்கம்! '}உங்களுக்கு ${n} திட்டம் கண்டறியப்பட்டது.`,
-  Hindi:   (n, name) => `${name ? name + ' जी, नमस्ते! ' : 'नमस्ते! '}आपके लिए ${n} योजनाएँ मिली हैं।`,
-  Telugu:  (n, name) => `${name ? name + ' గారికి నమస్కారం! ' : 'నమస్కారం! '}మీకు ${n} పథకాలు దొరికాయి.`,
-  Kannada: (n, name) => `${name ? name + ' ಅವರಿಗೆ ನಮಸ್ಕಾರ! ' : 'ನಮಸ್ಕಾರ! '}ನಿಮಗೆ ${n} ಯೋಜನೆಗಳು ಸಿಕ್ಕಿವೆ.`,
-  Bengali: (n, name) => `${name ? name + ', নমস্কার! ' : 'নমস্কার! '}আপনার জন্য ${n}টি প্রকল্প পাওয়া গেছে।`,
-  Marathi: (n, name) => `${name ? name + ', नमस्कार! ' : 'नमस्कार! '}तुमच्यासाठी ${n} योजना सापडल्या.`,
-  English: (n, name) => `${name ? 'Hello ' + name + '! ' : 'Hello! '}I found ${n} scheme${n > 1 ? 's' : ''} for you.`,
+  Tamil: (n) => `வணக்கம்! உங்களுக்கு ${n} திட்டம் கண்டறியப்பட்டது.`,
+  Hindi: (n) => `नमस्ते! आपके लिए ${n} योजनाएँ मिली हैं।`,
+  Telugu: (n) => `నమస్కారం! మీకు ${n} పథకాలు దొరికాయి.`,
+  Kannada: (n) => `ನಮಸ್ಕಾರ! ನಿಮಗೆ ${n} ಯೋಜನೆಗಳು ಸಿಕ್ಕಿವೆ.`,
+  Bengali: (n) => `নমস্কার! আপনার জন্য ${n}টি প্রকল্প পাওয়া গেছে।`,
+  Marathi: (n) => `नमस्कार! तुमच्यासाठी ${n} योजना सापडल्या.`,
+  English: (n) => `Hello! I found ${n} scheme${n === 1 ? '' : 's'} for you.`,
+}
+const fallbackReply = (lang, n) => (FALLBACK_REPLIES[lang] || FALLBACK_REPLIES.English)(n)
+
+const normalizeName = (name = '') => name.toLowerCase()
+  .replace(/\s+(tn|tamilnadu|tamil nadu|ap|andhra|telangana|karnataka|kerala|maharashtra|gujarat|punjab|haryana|odisha|bihar|rajasthan|wb|up|mp|cg|jh|uk|hp|goa|delhi|assam)$/i, '')
+  .replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim()
+
+const toCard = (s) => ({
+  id: s._id ? String(s._id) : undefined,
+  name: s.name || 'Unknown Scheme',
+  ministry: s.ministry || (s.state && s.state !== 'Central' ? `Government of ${s.state}` : 'Government of India'),
+  benefit: s.benefit || 'Check official portal',
+  category: s.category || 'Other',
+  state: s.state || 'Central',
+  eligibility: Math.min(Math.max(s.matchScore || 45, 40), 95), // 0-100 score the UI already uses
+  reason: s.reason || 'May match your situation — verify at the official portal',
+  applyLink: s.applyLink || '',
+  eligibilityCriteria: Array.isArray(s.eligibilityCriteria) ? s.eligibilityCriteria : [],
+  documents: Array.isArray(s.documents) ? s.documents : [],
+})
+
+const publicProfile = (p = {}) => Object.fromEntries(Object.entries(p).filter(([k]) => !k.startsWith('_')))
+const hasSignal = (p) => !!(p.occupation || Number.isFinite(p.age) || p.need_category?.length || p.caste || p.is_widow || p.is_disabled || p.gender)
+
+function dedupe(list) {
+  const seen = []
+  return list.filter((s) => {
+    const n = normalizeName(s.name)
+    if (seen.some((x) => x.includes(n) || n.includes(x))) return false
+    seen.push(n)
+    return true
+  })
 }
 
-// ── Normalize scheme name for deduplication ───────────────────
-function normalizeName(name) {
-  return name
-    .toLowerCase()
-    .replace(/\s+(tn|tamilnadu|tamil nadu|ap|andhra|telangana|karnataka|kerala|maharashtra|gujarat|punjab|haryana|odisha|bihar|rajasthan|wb|up|mp|cg|jh|uk|hp|goa|delhi|assam)$/i, '')
-    .replace(/[^a-z0-9\s]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-// ── Fetch state-specific schemes directly ─────────────────────
-async function fetchStateSchemes(state, profile, limit = 3) {
-  if (!state) return []
-  try {
-    const stateSchemes = await Scheme.find({ isActive: true, state }).lean()
-    if (!stateSchemes.length) return []
-    const scored = matchSchemesByProfile(stateSchemes, profile, '')
-    return scored.slice(0, limit).map(s => ({
-      name: s.name || 'Unknown Scheme',
-      ministry: s.ministry || `Government of ${state}`,
-      benefit: s.benefit || 'Check official portal',
-      category: s.category || 'Other',
-      state: s.state,
-      eligibility: Math.min(Math.max(s.matchScore || 70, 60), 95),
-      reason: s.reason || `${state} state scheme — check eligibility`,
-      applyLink: s.applyLink || '',
-      eligibilityCriteria: Array.isArray(s.eligibilityCriteria) ? s.eligibilityCriteria : [],
-    }))
-  } catch (err) {
-    logger.warn(`State scheme fetch error: ${err.message}`)
-    return []
+// Ask for at most 2 times per field so we never nag
+function pickNextField(profile) {
+  const asked = profile._asked || {}
+  for (const f of ['state', 'occupation', 'age']) {
+    const known = f === 'age' ? Number.isFinite(profile.age) : !!profile[f]
+    if (!known && (asked[f] || 0) < 2) return f
   }
+  return null
 }
 
 router.post('/message', async (req, res) => {
-  const { message, sessionId, language = 'English' } = req.body
-  if (!message?.trim()) return res.status(400).json({ error: 'Message is required' })
+  const { message: raw, alternatives = [], sessionId, language = 'English', mode = 'text', confirmed = false } = req.body
+  const message = String(raw || alternatives[0] || '').trim().slice(0, 1000)
+  if (!message) return res.status(400).json({ error: 'Message is required' })
 
   const sid = sessionId || uuidv4()
 
   try {
     let session = await Session.findOne({ sessionId: sid })
     if (!session) session = new Session({ sessionId: sid, language })
+    const history = session.messages.slice(-6).map((m) => ({ role: m.role, content: m.content }))
 
-    // Extract profile
-    const keywordProfile = extractProfileFromText(message)
-    let groqProfile = {}
-    try { groqProfile = await extractProfile(message) } catch { }
+    // 1 ── understand ─────────────────────────────────────────
+    const u = await understand({ message, alternatives, history, profile: session.userProfile || {}, language })
 
-    const newProfile = { ...keywordProfile }
-    for (const [k, v] of Object.entries(groqProfile)) {
-      if (v !== null && v !== undefined) newProfile[k] = v
+    // Voice: if unsure what was said, let the UI confirm before doing anything
+    if (mode === 'voice' && !confirmed && u.confidence < 0.6 && u.intent !== 'greeting') {
+      return res.json({
+        needsConfirmation: true, understood: u.corrected_text, confidence: u.confidence,
+        reply: '', schemes: [], sessionId: sid, userProfile: publicProfile(session.userProfile),
+      })
     }
 
-    const mergedProfile = { ...(session.userProfile || {}) }
-    for (const [k, v] of Object.entries(newProfile)) {
-      if (v !== null && v !== undefined) {
-        if (k === 'need_category' && Array.isArray(v)) {
-          const existing = mergedProfile.need_category || []
-          mergedProfile.need_category = [...new Set([...existing, ...v])]
+    // 2 ── merge profile (never erase known facts) ────────────
+    const profile = mergeProfile(session.userProfile || {}, u.profile_updates)
+    profile._asked = { ...(session.userProfile?._asked || {}) }
+    logger.info(`Understood [${u.intent} ${u.confidence}${u._fallback ? ' fallback' : ''}] "${u.corrected_text}" → ${JSON.stringify(u.profile_updates)}`)
+
+    // 3 ── decide what to do ─────────────────────────────────
+    let situation = 'schemes'
+    let cards = []
+    let nextField = null
+
+    if (u.intent === 'greeting') situation = 'greeting'
+    else if (u.intent === 'off_topic') situation = 'off_topic'
+    else if (u.intent === 'unclear') situation = 'unclear'
+    else {
+      // asking about a specific scheme -> answer from stored data
+      if (['scheme_detail', 'how_to_apply', 'documents_needed'].includes(u.intent) && u.referenced_scheme) {
+        const found = await findSchemeByName(u.referenced_scheme, profile.state)
+        if (found) {
+          cards = matchSchemesByProfile([found], profile, '', 1, { hardFilter: false }).map(toCard)
+          situation = 'detail'
+        }
+      }
+      if (!cards.length) {
+        if (!hasSignal(profile)) {
+          situation = 'ask'
+          nextField = pickNextField(profile) || 'occupation'
         } else {
-          mergedProfile[k] = v
+          const candidates = await searchSchemes({ query: u.english_text, profile })
+          const scored = matchSchemesByProfile(candidates, profile, u.english_text, 60, { minScore: 50 })
+          const central = scored.filter((s) => s.state === 'Central').slice(0, 3)
+          const state = scored.filter((s) => s.state !== 'Central').slice(0, 2)
+          let picked = dedupe([...central, ...state]).sort((a, b) => b.matchScore - a.matchScore)
+          if (mode === 'voice') picked = picked.slice(0, 3)
+          cards = picked.map(toCard)
+          situation = cards.length ? 'schemes' : 'no_match'
+          nextField = pickNextField(profile)
         }
       }
     }
-    session.userProfile = mergedProfile
+    if (nextField) profile._asked[nextField] = (profile._asked[nextField] || 0) + 1
 
-    logger.info(`Profile: age=${mergedProfile.age}, gender=${mergedProfile.gender}, occ=${mergedProfile.occupation}, state=${mergedProfile.state}, caste=${mergedProfile.caste}`)
+    // 4 ── translate cards (+reason) in ONE call ─────────────
+    cards = await localizeSchemes(cards, language)
 
-    // ── Step 1: Get Central schemes from RAG ──────────────────
-    let ragSchemes = []
-    try { ragSchemes = await semanticSearch(message, mergedProfile, 10) } catch { }
-    if (!ragSchemes.length) {
-      try { ragSchemes = await mongoTextSearch(message, mergedProfile, 10) } catch { }
-    }
-
-    const schemesForScoring = ragSchemes.length > 0
-      ? ragSchemes.map(r => ({ ...(r.metadata || {}), ...r }))
-      : await Scheme.find({ isActive: true, state: 'Central' }).lean()
-
-    let centralSchemes = matchSchemesByProfile(schemesForScoring, mergedProfile, message).slice(0, 3)
-
-    // Groq scoring — now passes `language` so the "reason" comes back
-    // already written in the user's chosen language.
-    try {
-      const enhanced = await Promise.all(
-        centralSchemes.map(async (s) => {
-          try {
-            const scored = await scoreEligibility(mergedProfile, {
-              name: s.name,
-              description: s.description || '',
-              eligibility: Array.isArray(s.eligibilityCriteria) ? s.eligibilityCriteria : [],
-            }, language)
-            return {
-              ...s,
-              matchScore: Math.max(scored.score || 0, s.matchScore || 0),
-              reason: scored.reason || s.reason,
-            }
-          } catch { return s }
-        })
-      )
-      centralSchemes = enhanced.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0))
-    } catch { }
-
-    centralSchemes = centralSchemes.slice(0, 3).map(s => ({
-      name: s.name || 'Unknown Scheme',
-      ministry: s.ministry || 'Government of India',
-      benefit: s.benefit || 'Check official portal',
-      category: s.category || 'Other',
-      state: 'Central',
-      eligibility: Math.min(Math.max(s.matchScore || 45, 40), 95),
-      reason: s.reason || 'May be eligible — verify at official portal',
-      applyLink: s.applyLink || '',
-      eligibilityCriteria: Array.isArray(s.eligibilityCriteria) ? s.eligibilityCriteria : [],
-    }))
-
-    // ── Step 2: Get State schemes ─────────────────────────────
-    const stateSchemes = await fetchStateSchemes(mergedProfile.state, mergedProfile, 3)
-
-    // ── Step 3: Combine with smart deduplication ──────────────
-    // Use normalized name comparison to catch variants like "Scheme TN" vs "Scheme"
-    const seenNormalized = new Set()
-
-    const deduped = [...centralSchemes, ...stateSchemes].filter(s => {
-      const normalized = normalizeName(s.name)
-      // Check if any existing seen name is a substring or superset
-      for (const seen of seenNormalized) {
-        if (seen.includes(normalized) || normalized.includes(seen)) return false
-      }
-      seenNormalized.add(normalized)
-      return true
-    })
-
-    let topSchemes = deduped
-
-    // ── Step 4: Translate scheme name/ministry/benefit into the
-    // user's chosen language (no-op + zero cost when language is
-    // English). Falls back to English silently if the Groq call
-    // fails, so a translation hiccup never breaks the response. ──
-    try {
-      topSchemes = await translateSchemeFields(topSchemes, language)
-    } catch (err) {
-      logger.warn(`Scheme translation skipped: ${err.message}`)
-    }
-
-    // Generate reply — uses the already-translated scheme names so
-    // the AI's spoken/written reply matches what's shown in the cards.
+    // 5 ── grounded reply ────────────────────────────────────
     let reply = ''
     try {
-      reply = await generateAIReply({
-        message,
-        history: session.messages.slice(-6),
-        userProfile: mergedProfile,
-        matchedSchemes: topSchemes,
-        language,
+      reply = await generateGroundedReply({
+        message, understood: u.corrected_text, confidence: u.confidence, history, profile: publicProfile(profile),
+        schemes: cards, language, mode, situation, nextField, hint: u.clarifying_question || '',
       })
-    } catch {
-      reply = (FALLBACK_REPLIES[language] || FALLBACK_REPLIES.English)(topSchemes.length, mergedProfile.name)
+    } catch (err) {
+      logger.warn(`Reply generation failed: ${err.message}`)
     }
+    if (!reply) reply = u.clarifying_question || fallbackReply(language, cards.length)
 
+    // 6 ── persist ───────────────────────────────────────────
+    session.userProfile = profile
     session.messages.push({ role: 'user', content: message })
-    session.messages.push({ role: 'ai', content: reply, schemes: topSchemes })
+    session.messages.push({ role: 'ai', content: reply, schemes: cards })
     session.language = language
     session.updatedAt = new Date()
     await session.save()
 
-    const centralCount = topSchemes.filter(s => s.state === 'Central').length
-    const stateCount = topSchemes.filter(s => s.state !== 'Central').length
-    logger.info(`Chat [${sid.slice(0, 8)}]: "${message.slice(0, 40)}..." → ${topSchemes.length} schemes (${centralCount} central + ${stateCount} state)`)
-    res.json({ reply, schemes: topSchemes, sessionId: sid, userProfile: mergedProfile })
-
+    res.json({
+      reply,
+      speech: mode === 'voice' ? cleanForSpeech(reply) : undefined,
+      schemes: cards,
+      sessionId: sid,
+      userProfile: publicProfile(profile),
+      understood: u.corrected_text,
+      confidence: u.confidence,
+      intent: u.intent,
+      needsConfirmation: false,
+    })
   } catch (err) {
-    logger.error(`Chat error: ${err.message}`)
+    logger.error(`Chat error: ${err.stack || err.message}`)
     try {
-      const allSchemes = await Scheme.find({ isActive: true }).limit(6).lean()
+      const all = await Scheme.find({ isActive: true, state: 'Central' }).limit(200).lean()
       const profile = extractProfileFromText(message)
-      const scored = matchSchemesByProfile(allSchemes, profile, message)
-      return res.json({
-        reply: (FALLBACK_REPLIES[language] || FALLBACK_REPLIES.English)(scored.length, null),
-        schemes: scored.slice(0, 6),
-        sessionId: sid,
-        userProfile: profile,
-      })
+      const scored = matchSchemesByProfile(all, profile, message, 3).map(toCard)
+      return res.json({ reply: fallbackReply(language, scored.length), schemes: scored, sessionId: sid, userProfile: publicProfile(profile) })
     } catch {
       return res.status(500).json({ error: 'Service unavailable', reply: 'Please try again.', schemes: [], sessionId: sid })
     }
@@ -212,7 +179,7 @@ router.get('/history/:sessionId', async (req, res) => {
   try {
     const session = await Session.findOne({ sessionId: req.params.sessionId }).lean()
     if (!session) return res.status(404).json({ error: 'Session not found' })
-    res.json({ messages: session.messages, userProfile: session.userProfile })
+    res.json({ messages: session.messages, userProfile: publicProfile(session.userProfile) })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 

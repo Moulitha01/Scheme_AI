@@ -1,10 +1,10 @@
 import dotenv from 'dotenv'
 import { fileURLToPath } from 'url'
-import { dirname } from 'path'
+import { dirname, join } from 'path'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
-dotenv.config({ path: 'C:\\Users\\mouli\\Desktop\\schemeai\\GenX\\scheme-ai\\backend\\.env' })
+dotenv.config({ path: join(__dirname, '..', '.env') })
 
 import express from 'express'
 import cors from 'cors'
@@ -15,6 +15,9 @@ import rateLimit from 'express-rate-limit'
 import { connectDB } from './utils/db.js'
 import { logger } from './utils/logger.js'
 import chatRoutes from './routes/chat.js'
+import schemeRoutes from './routes/schemes.js'
+import chatRoutes from './routes/chat.js'
+import sttRoutes from './routes/stt.js'
 import schemeRoutes from './routes/schemes.js'
 import ocrRoutes from './routes/ocr.js'
 import userRoutes from './routes/users.js'
@@ -38,13 +41,16 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 300,
   message: { error: 'Too many requests. Please try again later.' },
 })
 app.use('/api/', limiter)
 
 // ── Routes ────────────────────────────────────────────────────
 app.use('/api/chat', chatRoutes)
+app.use('/api/a2a', a2aRoutes)
+app.use('/api/chat', chatRoutes)
+app.use('/api/stt', sttRoutes)
 app.use('/api/a2a', a2aRoutes)
 app.use('/api/schemes', schemeRoutes)
 app.use('/api/ocr', ocrRoutes)
