@@ -11,7 +11,6 @@ const client = () => (_groq ??= new Groq({ apiKey: process.env.GROQ_API_KEY }))
 
 // llama-3.3-70b is NOT a reasoning model, so max_tokens is not eaten by hidden
 // "thinking" tokens (that is what made short JSON calls return empty on gpt-oss).
-export const MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile'
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -20,18 +19,26 @@ export const LANG_CODE = {
   Kannada: 'kn', Gujarati: 'gu', Malayalam: 'ml', Punjabi: 'pa', Urdu: 'ur', Odia: 'or',
 }
 
-export async function callGroq(messages, { temperature = 0.3, maxTokens = 400, json = false, model = MODEL } = {}) {
+export async function callGroq(messages, { temperature = 0.3, maxTokens = 400, json = false, model = process.env.GROQ_MODEL || 'openai/gpt-oss-120b' } = {}) {  const reasoning = /gpt-oss/i.test(model)
+  let useJson = json
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const res = await client().chat.completions.create({
         model,
         messages,
         temperature,
-        max_tokens: maxTokens,
-        ...(json ? { response_format: { type: 'json_object' } } : {}),
+        max_tokens: reasoning ? maxTokens + 1000 : maxTokens,
+        ...(reasoning ? { reasoning_effort: 'low' } : {}),
+        ...(useJson ? { response_format: { type: 'json_object' } } : {}),
       })
       return res.choices[0]?.message?.content || ''
     } catch (err) {
+      // model rejected JSON mode -> retry once as plain text (extractJSON still parses it)
+      if (err?.status === 400 && useJson) {
+        logger.warn(`JSON mode rejected by ${model}, retrying as plain text`)
+        useJson = false
+        continue
+      }
       const retryable = err?.status === 429 || err?.status >= 500
       if (retryable && attempt < 2) {
         logger.warn(`Groq ${err.status} — retry ${attempt + 1}`)
@@ -99,8 +106,10 @@ export async function generateGroundedReply({
     (s.applyLink ? ' | Apply: online portal (shown on the card)' : ' | Apply: nearest office / CSC')
   ).join('\n')
 
-  const echo = (confidence < 0.75 || (understood && understood.trim() !== message.trim()))
-    ? `Start by saying what you understood, in one short phrase, translated into ${language}: "${understood || message}". `
+  // The UI already shows an "I understood: ..." line from the `understood` field,
+  // so only echo in the spoken reply when the model is genuinely unsure.
+  const echo = (confidence < 0.75)
+    ? `Start with one short sentence, in ${language}, saying what you understood (for example "I understood that you are a farmer in Tamil Nadu who needs a loan"), then continue. `
     : ''
 
   const style = voice

@@ -3,7 +3,8 @@
 import Groq from 'groq-sdk'
 import { logger } from '../utils/logger.js'
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
+let _groq
+const getGroq = () => (_groq ??= new Groq({ apiKey: process.env.GROQ_API_KEY }))
 
 const MODEL = 'openai/gpt-oss-120b' // best free model on Groq
 
@@ -11,8 +12,7 @@ const MODEL = 'openai/gpt-oss-120b' // best free model on Groq
 async function callGroq(messages, { temperature = 0.3, maxTokens = 512 } = {}) {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const res = await groq.chat.completions.create({
-        model: MODEL,
+      const res = await getGroq().chat.completions.create({        model: MODEL,
         messages,
         temperature,
         max_tokens: maxTokens,

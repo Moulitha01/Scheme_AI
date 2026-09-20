@@ -6,6 +6,8 @@
 //  - /sc|st/ matched "student", "state", "scholarship" and inflated scores
 //  - is_disabled:false / is_widow:false defaults overwrote earlier true values on merge
 
+import { STATE_LIST } from './fuzzy.js'
+
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const isLatin = (w) => /^[\x00-\x7f]+$/.test(w)
 
@@ -121,6 +123,7 @@ const RULES = [
   R((p) => A(p, (a) => a >= 18 && a <= 40), /mudra|pmegp/, 10, () => 'Loan support for working-age people'),
 
   R((p) => p.occupation === 'farmer', /kisan|farmer|agri|crop|fasal|pmfby|rythu|karshaka|krishi/, 40, () => 'Made for farmers like you'),
+  R((p) => p.occupation === 'farmer', /pm.?kisan|kisan credit|\bkcc\b|pmfby|fasal bima/, 25, () => 'National flagship scheme for farmers'),
   R((p) => p.occupation === 'farmer', /mgnrega|nrega/, 15, () => 'Guaranteed work for rural families'),
   R((p) => p.occupation === 'student', /scholarship|student|education|nsp|vidya|merit|pragati/, 40, () => 'Scholarship matching your student status'),
   R((p) => p.occupation === 'student', /hostel|skill|pmkvy/, 15, () => 'Support for students'),
@@ -151,11 +154,48 @@ const RULES = [
 
 const STOP = new Set(['need', 'want', 'help', 'scheme', 'schemes', 'with', 'from', 'that', 'this', 'have', 'please', 'government', 'india', 'indian', 'tell', 'give', 'apply', 'about', 'what', 'which'])
 
+// Groups a scheme can be aimed at. If the scheme targets a group the person
+// hasn't told us they belong to, it is pushed down (or dropped if they clearly don't).
+const TARGETS = [
+  { re: /\b(sc|st|scheduled castes?|scheduled tribes?|dalit|adivasi|tribal)\b/, pen: 80, raw: /NSFDC|NSKFDC|NSTFDC|Safai Karamchari|Scheduled Castes? (Finance|Development)/i, has: (p) => p.caste === 'sc' || p.caste === 'st', conflict: (p) => !!p.caste && p.caste !== 'sc' && p.caste !== 'st' },
+  { re: /\bobc\b|other backward|backward classes?/, pen: 80, raw: /NBCFDC|Backward Classes? (Finance|Development)/i, has: (p) => p.caste === 'obc', conflict: (p) => p.caste === 'general' },
+  { re: /\bminorit(y|ies)\b|\b(muslim|christian|sikh|buddhist|parsi)\b/, pen: 80, raw: /NMDFC|Minorities Development/i, has: () => false, conflict: () => false },
+  { re: /\b(women|woman|mahila|girl child|widows?|beti)\b/, has: (p) => p.gender === 'female' || p.is_widow, conflict: (p) => p.gender === 'male' },
+  { re: /\b(divyang|disabled|disability|handicapped)\b/, has: (p) => !!p.is_disabled, conflict: () => false },
+  { re: /\b(senior citizens?|old age|vridha)\b/, has: (p) => Number.isFinite(p.age) && p.age >= 58, conflict: (p) => Number.isFinite(p.age) && p.age < 55 },
+]
+
+const stateRes = STATE_LIST.map((st) => [st, new RegExp(`\\b${esc(st.toLowerCase())}\\b`)])
+function mentionedStates(s) {
+  const crit = (s.eligibilityCriteria || []).filter((c) => typeof c === 'string').join(' ').slice(0, 600)
+  const t = `${s.name || ''} ${s.ministry || ''} ${s.applyLink || ''} ${(s.description || '').slice(0, 600)} ${crit}`.toLowerCase()
+  return stateRes.filter(([, re]) => re.test(t)).map(([st]) => st)
+}
+
+function ageRangeOf(s) {
+  for (const c of s.eligibilityCriteria || []) {
+    if (typeof c !== 'string' || c.length > 80) continue // ignore scraped junk lines
+    const m = c.match(/age\D{0,8}(\d{1,2})\s*(?:-|–|to)\s*(\d{1,2})/i)
+    if (m) return [+m[1], +m[2]]
+  }
+  return null
+}
+
 function passesHardFilters(s, p) {
   const name = (s.name || '').toLowerCase()
-  if (p.gender === 'male' && /\b(women|woman|girl|mahila|beti|widow|sukanya|janani|maternity|ladki|ujjwala)\b/.test(name)) return false
-  if (Number.isFinite(p.age) && p.age < 55 && /old age|senior citizen|vridha|vayo/.test(name)) return false
   if (p.state && s.state && s.state !== 'Central' && s.state !== p.state) return false
+  // Crawled schemes are sometimes mislabelled "Central" although they belong to one state (e.g. Goa fisheries)
+  if (!s.state || s.state === 'Central') {
+    const ms = mentionedStates(s)
+    if (ms.length && ms.length <= 2 && !ms.includes(p.state)) return false
+  }
+    // "Chief Minister / Mukhya Mantri" schemes are always one state's scheme; a "Central" label on them is a crawler error
+  if ((!s.state || s.state === 'Central') && /\b(chief minister|mukhya ?mantri|mukhyamantri)\b/i.test(s.name || '')) return false
+  for (const t of TARGETS) if ((t.re.test(name) || t.raw?.test(s.name || '')) && t.conflict(p)) return false
+  if (Number.isFinite(p.age)) {
+    const r = ageRangeOf(s)
+    if (r && (p.age < r[0] || p.age > r[1])) return false
+  }
   return true
 }
 
@@ -177,6 +217,11 @@ export function matchSchemesByProfile(schemes, profile, userText = '', limit = 6
       }
     }
     if (profile.state && scheme.state === profile.state) score += 15
+    // aimed at a group the person hasn't said they belong to -> push down
+    const head = `${scheme.name || ''} ${(scheme.description || '').slice(0, 160)}`.toLowerCase()
+    const crit = (scheme.eligibilityCriteria || []).filter((c) => typeof c === 'string' && c.length <= 160).join(' ').slice(0, 250)
+    const rawHead = `${scheme.name || ''} ${scheme.applyLink || ''} ${(scheme.description || '').slice(0, 160)} ${crit}`
+    for (const tg of TARGETS) if ((tg.re.test(nameOnly) || tg.raw?.test(rawHead)) && !tg.has(profile)) score -= (tg.pen || 35)
     let kw = 0
     for (const w of words) {
       if (nameOnly.includes(w)) kw += 8
@@ -193,13 +238,16 @@ export function matchSchemesByProfile(schemes, profile, userText = '', limit = 6
       : (profile.state && scheme.state === profile.state ? `${profile.state} state scheme` : 'May match your situation — verify at the official portal')
 
     if (score < minScore) continue
+    // rank by the raw score, but show a spread-out 40-95 number (the old cap made everything 95)
+    const shown = Math.min(95, Math.max(40, Math.round(35 + (score - 30) * 0.4)))
     scored.push({
       ...scheme,
-      matchScore: Math.min(score, 95),
+      rawScore: score,
+      matchScore: shown,
       reason,
       benefit: scheme.benefit || 'Check official portal',
       applyLink: scheme.applyLink || '',
     })
   }
-  return scored.sort((a, b) => b.matchScore - a.matchScore).slice(0, limit)
+  return scored.sort((a, b) => b.rawScore - a.rawScore).slice(0, limit)
 }

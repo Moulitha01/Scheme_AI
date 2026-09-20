@@ -1,11 +1,4 @@
-import dotenv from 'dotenv'
-import { fileURLToPath } from 'url'
-import { dirname, join } from 'path'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
-dotenv.config({ path: join(__dirname, '..', '.env') })
-
+import './env.js'
 import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
@@ -14,8 +7,6 @@ dns.setServers(['1.1.1.1', '8.8.8.8'])
 import rateLimit from 'express-rate-limit'
 import { connectDB } from './utils/db.js'
 import { logger } from './utils/logger.js'
-import chatRoutes from './routes/chat.js'
-import schemeRoutes from './routes/schemes.js'
 import chatRoutes from './routes/chat.js'
 import sttRoutes from './routes/stt.js'
 import schemeRoutes from './routes/schemes.js'
@@ -47,8 +38,6 @@ const limiter = rateLimit({
 app.use('/api/', limiter)
 
 // ── Routes ────────────────────────────────────────────────────
-app.use('/api/chat', chatRoutes)
-app.use('/api/a2a', a2aRoutes)
 app.use('/api/chat', chatRoutes)
 app.use('/api/stt', sttRoutes)
 app.use('/api/a2a', a2aRoutes)

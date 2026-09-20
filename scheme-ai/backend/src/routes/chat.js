@@ -27,6 +27,19 @@ const normalizeName = (name = '') => name.toLowerCase()
   .replace(/\s+(tn|tamilnadu|tamil nadu|ap|andhra|telangana|karnataka|kerala|maharashtra|gujarat|punjab|haryana|odisha|bihar|rajasthan|wb|up|mp|cg|jh|uk|hp|goa|delhi|assam)$/i, '')
   .replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim()
 
+// Crawled pages leave junk like "Something went wrong. Please try again later" and garbled characters
+const JUNK = /something\s*went\s*wrong|sign\s*in|feedback|cancel|sources|references|â€|ï»¿|â‚¹|Ã/i
+const cleanCriteria = (arr) => (Array.isArray(arr) ? arr : [])
+  .map((t) => String(t).replace(/\s+/g, ' ').trim())
+  .filter((t) => t.length > 3 && t.length <= 160 && !JUNK.test(t))
+  .slice(0, 6)
+
+// scraped links sometimes carry junk glued to the end (…/enï»¿You, …ID=142Sources)
+const cleanLink = (u = '') => {
+  const m = String(u).match(/^https?:\/\/[^\s"'<>ï»¿â€]+/)
+  return m ? m[0].replace(/(Sources|References|Feedback|Questions|You)$/, '') : ''
+}
+
 const toCard = (s) => ({
   id: s._id ? String(s._id) : undefined,
   name: s.name || 'Unknown Scheme',
@@ -36,8 +49,8 @@ const toCard = (s) => ({
   state: s.state || 'Central',
   eligibility: Math.min(Math.max(s.matchScore || 45, 40), 95), // 0-100 score the UI already uses
   reason: s.reason || 'May match your situation — verify at the official portal',
-  applyLink: s.applyLink || '',
-  eligibilityCriteria: Array.isArray(s.eligibilityCriteria) ? s.eligibilityCriteria : [],
+  applyLink: cleanLink(s.applyLink),
+  eligibilityCriteria: cleanCriteria(s.eligibilityCriteria),
   documents: Array.isArray(s.documents) ? s.documents : [],
 })
 
@@ -118,7 +131,7 @@ router.post('/message', async (req, res) => {
           const scored = matchSchemesByProfile(candidates, profile, u.english_text, 60, { minScore: 50 })
           const central = scored.filter((s) => s.state === 'Central').slice(0, 3)
           const state = scored.filter((s) => s.state !== 'Central').slice(0, 2)
-          let picked = dedupe([...central, ...state]).sort((a, b) => b.matchScore - a.matchScore)
+          let picked = dedupe([...central, ...state]).sort((a, b) => b.rawScore - a.rawScore)
           if (mode === 'voice') picked = picked.slice(0, 3)
           cards = picked.map(toCard)
           situation = cards.length ? 'schemes' : 'no_match'

@@ -39,9 +39,12 @@ Rules:
 - If several transcriptions of the same speech are given, choose the most plausible meaning.
 - If garbled but a plausible meaning exists, choose it and set confidence below 0.6.
 - If truly unintelligible: intent "unclear" and write a friendly clarifying_question.
+- Extract occupation and caste even from very short messages: "student scolarship sc categry" -> occupation student, caste sc.
+- Do NOT guess gender from grammar or verb endings. Set gender only from explicit words (woman, girl, widow, "my husband died", etc.).
 - A bare answer to a question we asked (e.g. just a state name or a number) is intent "update_profile".
 - Use conversation history to resolve "it", "that scheme", "and for my wife?".
 - Questions about schemes, money, help, documents, applying = never "off_topic".`
+
 
 const num = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : null }
 
@@ -99,6 +102,12 @@ export async function understand({ message, alternatives = [], history = [], pro
     if (!j) throw new Error('bad json')
 
     const updates = cleanUpdates(j.profile_updates)
+    // Safety net: fill fields the LLM missed using the offline extractors
+    const backup = cleanUpdates(mergeProfile(extractProfileFromText(message), fuzzyProfile(message)))
+    for (const [k, v] of Object.entries(backup)) {
+      if (k === 'need_category' || k === 'gender') continue
+      if (updates[k] === undefined) updates[k] = v
+    }
     let intent = INTENTS.includes(j.intent) ? j.intent : (hasSignal(updates) ? 'find_schemes' : 'unclear')
     // Safety net: never let "off_topic" swallow a message where we found a real signal
     if (intent === 'off_topic' && hasSignal(updates)) intent = 'find_schemes'
