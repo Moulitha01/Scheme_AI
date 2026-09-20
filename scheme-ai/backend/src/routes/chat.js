@@ -6,11 +6,14 @@ import { v4 as uuidv4 } from 'uuid'
 import { Session, Scheme } from '../models/index.js'
 import { understand } from '../services/understand.js'
 import { searchSchemes, findSchemeByName } from '../services/search.js'
-import { generateGroundedReply, localizeSchemes, cleanForSpeech } from '../services/llm.js'
+import { generateGroundedReply, localizeSchemes, cleanForSpeech, LANG_CODE } from '../services/llm.js'
 import { extractProfileFromText, matchSchemesByProfile, mergeProfile } from '../services/profileExtractor.js'
 import { logger } from '../utils/logger.js'
 
 const router = express.Router()
+
+// the frontend sends languageCode ('ta'); the backend works with English names ('Tamil')
+const NAME_BY_CODE = Object.fromEntries(Object.entries(LANG_CODE).map(([name, code]) => [code, name]))
 
 const FALLBACK_REPLIES = {
   Tamil: (n) => `வணக்கம்! உங்களுக்கு ${n} திட்டம் கண்டறியப்பட்டது.`,
@@ -79,7 +82,8 @@ function pickNextField(profile) {
 }
 
 router.post('/message', async (req, res) => {
-  const { message: raw, alternatives = [], sessionId, language = 'English', mode = 'text', confirmed = false } = req.body
+  const { message: raw, alternatives = [], sessionId, language: langIn = 'English', languageCode, mode = 'text', confirmed = false } = req.body
+  const language = NAME_BY_CODE[languageCode] || langIn
   const message = String(raw || alternatives[0] || '').trim().slice(0, 1000)
   if (!message) return res.status(400).json({ error: 'Message is required' })
 

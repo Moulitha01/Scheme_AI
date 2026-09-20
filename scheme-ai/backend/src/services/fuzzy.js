@@ -1,6 +1,7 @@
 // backend/src/services/fuzzy.js  (NEW)
 // Typo-tolerant fallback that works with no LLM at all.
 export const STATE_LIST = [
+  'Chandigarh', 'Ladakh', 'Lakshadweep', 'Andaman and Nicobar Islands', 'Dadra and Nagar Haveli', 'Daman and Diu',
   'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Delhi', 'Goa', 'Gujarat',
   'Haryana', 'Himachal Pradesh', 'Jammu & Kashmir', 'Jharkhand', 'Karnataka', 'Kerala', 'Madhya Pradesh',
   'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Puducherry', 'Punjab',

@@ -157,9 +157,9 @@ const STOP = new Set(['need', 'want', 'help', 'scheme', 'schemes', 'with', 'from
 // Groups a scheme can be aimed at. If the scheme targets a group the person
 // hasn't told us they belong to, it is pushed down (or dropped if they clearly don't).
 const TARGETS = [
-  { re: /\b(sc|st|scheduled castes?|scheduled tribes?|dalit|adivasi|tribal)\b/, pen: 80, raw: /NSFDC|NSKFDC|NSTFDC|Safai Karamchari|Scheduled Castes? (Finance|Development)/i, has: (p) => p.caste === 'sc' || p.caste === 'st', conflict: (p) => !!p.caste && p.caste !== 'sc' && p.caste !== 'st' },
-  { re: /\bobc\b|other backward|backward classes?/, pen: 80, raw: /NBCFDC|Backward Classes? (Finance|Development)/i, has: (p) => p.caste === 'obc', conflict: (p) => p.caste === 'general' },
-  { re: /\bminorit(y|ies)\b|\b(muslim|christian|sikh|buddhist|parsi)\b/, pen: 80, raw: /NMDFC|Minorities Development/i, has: () => false, conflict: () => false },
+  { re: /\b(sc|st|scheduled castes?|scheduled tribes?|dalit|adivasi|tribal)\b/, pen: 120, raw: /NSFDC|NSKFDC|NSTFDC|Safai Karamchari|Scheduled Castes? (Finance|Development)/i, has: (p) => p.caste === 'sc' || p.caste === 'st', conflict: (p) => !!p.caste && p.caste !== 'sc' && p.caste !== 'st' },
+  { re: /\bobc\b|other backward|backward classes?/, pen: 120, raw: /NBCFDC|Backward Classes? (Finance|Development)/i, has: (p) => p.caste === 'obc', conflict: (p) => p.caste === 'general' },
+  { re: /\bminorit(y|ies)\b|\b(muslim|christian|sikh|buddhist|parsi)\b/, pen: 120, raw: /NMDFC|Minorities Development/i, has: () => false, conflict: () => false },
   { re: /\b(women|woman|mahila|girl child|widows?|beti)\b/, has: (p) => p.gender === 'female' || p.is_widow, conflict: (p) => p.gender === 'male' },
   { re: /\b(divyang|disabled|disability|handicapped)\b/, has: (p) => !!p.is_disabled, conflict: () => false },
   { re: /\b(senior citizens?|old age|vridha)\b/, has: (p) => Number.isFinite(p.age) && p.age >= 58, conflict: (p) => Number.isFinite(p.age) && p.age < 55 },
@@ -224,6 +224,10 @@ export function matchSchemesByProfile(schemes, profile, userText = '', limit = 6
     for (const tg of TARGETS) if ((tg.re.test(nameOnly) || tg.raw?.test(rawHead)) && !tg.has(profile)) score -= (tg.pen || 35)
     // schemes for entrepreneurs / start-ups are a weak fit for farmers, students, wage workers
     if (profile.occupation && profile.occupation !== 'business' && /entrepreneur|start-?up|first generation|msme/.test(`${nameOnly} ${crit}`.toLowerCase())) score -= 30
+    // actual pension schemes first when a pension is what the person needs
+    if (profile.need_category?.includes('pension') && /pension/.test(nameOnly)) score += 35
+    // national flagship pension schemes
+    if ((profile.is_widow || profile.is_disabled || (Number.isFinite(profile.age) && profile.age >= 60)) && /indira gandhi national|ignwps|ignoaps|ignda|nsap/.test(nameOnly)) score += 20
     let kw = 0
     for (const w of words) {
       if (nameOnly.includes(w)) kw += 8
