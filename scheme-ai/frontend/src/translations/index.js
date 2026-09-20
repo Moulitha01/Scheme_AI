@@ -1,1436 +1,209 @@
-// frontend/src/translations/index.js
-//
-// Lookup shape: translations[langCode].some.nested.key
-// Missing keys automatically fall back to translations.en (see LanguageContext.jsx).
-//
-// All 12 languages now have full page copy: nav, hero, stats, features,
-// howItWorks, demo, cta, footer.
+// backend/src/routes/chat.js  (REPLACE)
+// LLM calls per message: understand (1) + localize (1, non-English only) + reply (1)
+// Old flow was 1 + 3 + 1 + 1 = 6, which hit Groq rate limits and felt slow.
+import express from 'express'
+import { v4 as uuidv4 } from 'uuid'
+import { Session, Scheme } from '../models/index.js'
+import { understand } from '../services/understand.js'
+import { searchSchemes, findSchemeByName } from '../services/search.js'
+import { generateGroundedReply, localizeSchemes, cleanForSpeech, LANG_CODE } from '../services/llm.js'
+import { extractProfileFromText, matchSchemesByProfile, mergeProfile } from '../services/profileExtractor.js'
+import { logger } from '../utils/logger.js'
 
-const en = {
-  nav: {
-    home: 'Home', talkToAI: 'Talk to AI', schemes: 'Schemes',
-    scanId: 'Scan ID', dashboard: 'Dashboard', speakNow: 'Speak now',
-  },
-  modeSelect: {
-    title: 'How would you like to continue?',
-    subtitle: "Choose whatever's easiest for you",
-    textChatTitle: 'Text Chat',
-    textChatDesc: 'Type or speak, see results on screen',
-    voiceOnlyTitle: 'Voice-only Mode',
-    voiceOnlyDesc: 'Big buttons, spoken answers — built for easy use',
-  },
-  hero: {
-    badge: '✦ HACKATHON 3.0 — GENERATIVE AI FOR SOCIAL IMPACT',
-    titleLine1: 'Speak once.',
-    titleLine2: 'Claim everything',
-    titleHighlight: 'you are owed.',
-    subtitle: "Lakh-crore worth of Indian welfare benefits go unclaimed every year — not because people don't qualify, but because nobody told them. Scheme-AI listens to your story and finds the schemes hiding inside it.",
-    startTalking: 'Start talking →',
-    browseSchemes: 'Browse schemes',
-    tapToSpeak: 'Tap and speak in any language',
-    sampleAnswerLabel: 'Sample answer',
-    samples: [
-      'You qualify for 4 schemes. The nearest one gives your family ₹1,000 every month and needs only your ration card.',
-      'As a 65-year-old farmer from Tamil Nadu, you are eligible for PM-KISAN and Uzhavar Pathukappu Thittam.',
-      'Your daughter qualifies for the Moovalur Ramamirtham Ammaiyar scheme — free bicycle + ₹1,000 cash.',
-    ],
-  },
-  stats: [
-    { value: '500M+', label: 'underserved citizens' },
-    { value: '2,000+', label: 'central & state schemes' },
-    { value: '12+', label: 'Indian languages' },
-    { value: '28', label: 'states on the roadmap' },
-  ],
-  features: {
-    heading: 'Built for the person who has never filled a form online',
-    subheading: 'Most welfare tech is built for people who already know how to navigate bureaucracy. We built this for everyone else.',
-    items: [
-      { icon: '💬', title: 'Just talk, no forms', desc: 'Describe your life the way you would to a neighbour. The assistant does the paperwork thinking.' },
-      { icon: '🗣️', title: 'Your language, your words', desc: 'Hindi, Tamil, Telugu, Bengali and more — spoken input, spoken answers, simplified on request.' },
-      { icon: '📄', title: 'Documents read for you', desc: 'Scan an Aadhaar or ration card and the fields flow straight into your application.' },
-      { icon: '✅', title: 'Reasons you can check', desc: 'Every match carries a 0–100 score and a plain-language reason — no black box, no agent fee.' },
-    ],
-  },
-  howItWorks: {
-    kicker: 'The 4-layer prompt chain',
-    heading: 'What happens between your sentence and your answer',
-    steps: [
-      { title: 'Profile Extractor', desc: 'AI reads your age, occupation, caste, income and state from natural conversation.' },
-      { title: 'RAG Search', desc: '2,000+ schemes are searched instantly using your profile as the query.' },
-      { title: 'Eligibility Scorer', desc: 'Each scheme gets a 0–100 match score with a plain-language reason.' },
-      { title: 'Voice Reply', desc: 'Results are spoken back in your language with apply links and document checklist.' },
-    ],
-  },
-  demo: {
-    heading: 'See it in action',
-    subheading: "Here's what a 65-year-old farmer from Tamil Nadu would see:",
-    userMsg: 'I am a 65 year old farmer from Tamil Nadu',
-    aiMsg: 'As a 65-year-old farmer in Tamil Nadu, you may be eligible for the PM-KISAN scheme (₹6,000/year) and the Uzhavar Pathukappu Thittam (₹2 lakh accident insurance). Which state scheme would you like to apply for first?',
-    centralHeader: 'Central Government Schemes',
-    stateHeader: 'Tamil Nadu State Schemes',
-    schemeCards: [
-      { name: 'PM-KISAN Samman Nidhi', ministry: 'Ministry of Agriculture', benefit: '₹6,000/year', match: 95 },
-      { name: 'Ayushman Bharat PM-JAY', ministry: 'Ministry of Health', benefit: '₹5 lakh/year health', match: 88 },
-    ],
-    stateScheme: { name: 'Uzhavar Pathukappu', ministry: 'Govt of Tamil Nadu', benefit: '₹2 lakh insurance', match: 92 },
-  },
-  cta: {
-    heading: 'Your benefits are waiting.',
-    subheading: 'Start a conversation — no registration, no paperwork. Just speak.',
-    startTalking: '🎙️ Start talking now',
-    voiceOnly: '👴 Voice-only mode',
-  },
-  footer: {
-    tagline: '• Welfare Navigator',
-    privacy: 'Privacy', terms: 'Terms', about: 'About', contact: 'Contact',
-    builtFor: '© 2026 Scheme-AI • Built for India',
-  },
-  elderly: {
-    back: 'Back',
-    greetingTitle: 'Welcome',
-    greetingBody: 'Press the microphone and tell us about yourself',
-    trySaying: 'Try saying:',
-    example: 'Example: "My name is Raman, age 65, Tamil Nadu, farmer"',
-    listening: 'Listening...',
-    pressToSpeak: 'Press to speak',
-    youSaid: 'You said:',
-    findingSchemes: 'Finding your schemes...',
-    replyLabel: 'Scheme-AI Reply:',
-    playAgain: 'Play again',
-    centralSchemes: 'Central Government Schemes',
-    stateSchemes: 'State Schemes',
-    helpLine: '📞 Need help? — Show this to a family member or village panchayat officer',
-    applyNow: 'Apply Now',
-    errorMsg: 'Sorry, please try again.',
-  },
-  schemes: {
-    title: 'Browse All Government Schemes',
-    subtitle: 'central and state schemes — search by name, category or state',
-    searchPlaceholder: 'Search schemes e.g. PM-KISAN, scholarship, housing...',
-    searchButton: 'Search',
-    allStates: 'All States',
-    showing: 'Showing', of: 'of', schemesWord: 'schemes', inWord: 'in', forWord: 'for',
-    loading: 'Loading schemes...',
-    noResults: 'No schemes found. Try different filters.',
-    clearFilters: 'Clear filters',
-    benefit: 'BENEFIT',
-    central: 'Central',
-    apply: 'Apply →',
-    prev: '← Prev', next: 'Next →', page: 'Page',
-    ctaQuestion: 'Not sure which scheme you qualify for?',
-    ctaButton: '🎙️ Talk to AI — find your schemes',
-    categories: {
-      All: 'All', Agriculture: 'Agriculture', Education: 'Education', Health: 'Health',
-      Housing: 'Housing', 'Women & Child': 'Women & Child', Finance: 'Finance',
-      Employment: 'Employment', Disability: 'Disability',
-    },
-  },
+const router = express.Router()
+
+// the frontend sends languageCode ('ta'); the backend works with English names ('Tamil')
+const NAME_BY_CODE = Object.fromEntries(Object.entries(LANG_CODE).map(([name, code]) => [code, name]))
+
+const FALLBACK_REPLIES = {
+  Tamil: (n) => `வணக்கம்! உங்களுக்கு ${n} திட்டம் கண்டறியப்பட்டது.`,
+  Hindi: (n) => `नमस्ते! आपके लिए ${n} योजनाएँ मिली हैं।`,
+  Telugu: (n) => `నమస్కారం! మీకు ${n} పథకాలు దొరికాయి.`,
+  Kannada: (n) => `ನಮಸ್ಕಾರ! ನಿಮಗೆ ${n} ಯೋಜನೆಗಳು ಸಿಕ್ಕಿವೆ.`,
+  Bengali: (n) => `নমস্কার! আপনার জন্য ${n}টি প্রকল্প পাওয়া গেছে।`,
+  Marathi: (n) => `नमस्कार! तुमच्यासाठी ${n} योजना सापडल्या.`,
+  English: (n) => `Hello! I found ${n} scheme${n === 1 ? '' : 's'} for you.`,
+}
+const fallbackReply = (lang, n) => (FALLBACK_REPLIES[lang] || FALLBACK_REPLIES.English)(n)
+
+const normalizeName = (name = '') => name.toLowerCase()
+  .replace(/pradhan mantri/g, 'pm').replace(/[-_]/g, ' ')
+  .replace(/\s+(tn|tamilnadu|tamil nadu|ap|andhra|telangana|karnataka|kerala|maharashtra|gujarat|punjab|haryana|odisha|bihar|rajasthan|wb|up|mp|cg|jh|uk|hp|goa|delhi|assam)$/i, '')
+  .replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim()
+
+// Crawled pages leave junk like "Something went wrong. Please try again later" and garbled characters
+const JUNK = /something\s*went\s*wrong|sign\s*in|feedback|cancel|sources|references|â€|ï»¿|â‚¹|Ã/i
+const cleanCriteria = (arr) => (Array.isArray(arr) ? arr : [])
+  .map((t) => String(t).replace(/\s+/g, ' ').trim())
+  .filter((t) => t.length > 3 && t.length <= 160 && !JUNK.test(t))
+  .slice(0, 6)
+
+// scraped links sometimes carry junk glued to the end (…/enï»¿You, …ID=142Sources)
+const cleanLink = (u = '') => {
+  const m = String(u).match(/^https?:\/\/[^\s"'<>ï»¿â€]+/)
+  return m ? m[0].replace(/(Sources|References|Feedback|Questions|You)$/, '') : ''
 }
 
-const hi = {
-  nav: {
-    home: 'होम', talkToAI: 'AI से बात करें', schemes: 'योजनाएं',
-    scanId: 'ID स्कैन करें', dashboard: 'डैशबोर्ड', speakNow: 'अभी बोलें',
-  },
-  modeSelect: {
-    title: 'आप कैसे आगे बढ़ना चाहेंगे?',
-    subtitle: 'जो भी आपके लिए आसान हो वह चुनें',
-    textChatTitle: 'टेक्स्ट चैट',
-    textChatDesc: 'टाइप करें या बोलें, स्क्रीन पर परिणाम देखें',
-    voiceOnlyTitle: 'केवल-आवाज़ मोड',
-    voiceOnlyDesc: 'बड़े बटन, बोले गए जवाब — आसान उपयोग के लिए बनाया गया',
-  },
-  hero: {
-    badge: '✦ हैकाथॉन 3.0 — सामाजिक प्रभाव के लिए जेनरेटिव AI',
-    titleLine1: 'एक बार बोलिए।',
-    titleLine2: 'हर वो लाभ पाइए',
-    titleHighlight: 'जो आपका हक़ है।',
-    subtitle: 'हर साल लाखों करोड़ रुपये की भारतीय कल्याणकारी योजनाएं बिना दावा किए रह जाती हैं — इसलिए नहीं कि लोग पात्र नहीं हैं, बल्कि इसलिए कि किसी ने उन्हें बताया ही नहीं। Scheme-AI आपकी बात सुनकर उसमें छुपी योजनाएं ढूंढ निकालता है।',
-    startTalking: 'बोलना शुरू करें →',
-    browseSchemes: 'योजनाएं देखें',
-    tapToSpeak: 'किसी भी भाषा में टैप करें और बोलें',
-    sampleAnswerLabel: 'नमूना उत्तर',
-    samples: [
-      'आप 4 योजनाओं के लिए पात्र हैं। सबसे नज़दीकी योजना आपके परिवार को हर महीने ₹1,000 देती है और केवल राशन कार्ड चाहिए।',
-      'तमिलनाडु के 65 वर्षीय किसान होने के नाते, आप PM-KISAN और उझावर पथुक्काप्पु थिट्टम के लिए पात्र हैं।',
-      'आपकी बेटी मूवलूर रामामिर्तम अम्मैयार योजना के लिए पात्र है — मुफ़्त साइकिल + ₹1,000 नकद।',
-    ],
-  },
-  stats: [
-    { value: '50 करोड़+', label: 'वंचित नागरिक' },
-    { value: '2,000+', label: 'केंद्र व राज्य योजनाएं' },
-    { value: '12+', label: 'भारतीय भाषाएं' },
-    { value: '28', label: 'राज्य योजना में शामिल' },
-  ],
-  features: {
-    heading: 'उस व्यक्ति के लिए बनाया गया जिसने कभी ऑनलाइन फॉर्म नहीं भरा',
-    subheading: 'ज़्यादातर कल्याण तकनीक उन लोगों के लिए बनी है जो पहले से ही सरकारी प्रक्रिया जानते हैं। हमने इसे बाकी सबके लिए बनाया है।',
-    items: [
-      { icon: '💬', title: 'सिर्फ बोलिए, कोई फॉर्म नहीं', desc: 'अपनी ज़िंदगी के बारे में वैसे ही बताइए जैसे किसी पड़ोसी को बताते हैं। कागज़ी काम सहायक करता है।' },
-      { icon: '🗣️', title: 'आपकी भाषा, आपके शब्द', desc: 'हिंदी, तमिल, तेलुगु, बंगाली और और भी — बोलकर पूछिए, बोलकर जवाब पाइए, ज़रूरत पर आसान भाषा में।' },
-      { icon: '📄', title: 'दस्तावेज़ खुद पढ़े जाते हैं', desc: 'आधार या राशन कार्ड स्कैन कीजिए और जानकारी सीधे आपके आवेदन में भर जाती है।' },
-      { icon: '✅', title: 'कारण जो आप जांच सकते हैं', desc: 'हर मैच के साथ 0–100 का स्कोर और सीधी भाषा में कारण मिलता है — कोई ब्लैक बॉक्स नहीं, कोई एजेंट फीस नहीं।' },
-    ],
-  },
-  howItWorks: {
-    kicker: '4-चरणीय प्रॉम्प्ट चेन',
-    heading: 'आपके वाक्य और आपके जवाब के बीच क्या होता है',
-    steps: [
-      { title: 'प्रोफाइल एक्सट्रैक्टर', desc: 'AI सामान्य बातचीत से आपकी उम्र, पेशा, जाति, आय और राज्य समझता है।' },
-      { title: 'RAG सर्च', desc: 'आपकी प्रोफाइल को क्वेरी बनाकर तुरंत 2,000+ योजनाओं में खोज होती है।' },
-      { title: 'पात्रता स्कोरर', desc: 'हर योजना को 0–100 का मैच स्कोर और सीधी भाषा में कारण मिलता है।' },
-      { title: 'वॉइस रिप्लाई', desc: 'नतीजे आपकी भाषा में बोलकर बताए जाते हैं, साथ में आवेदन लिंक और दस्तावेज़ सूची।' },
-    ],
-  },
-  demo: {
-    heading: 'इसे काम करते देखिए',
-    subheading: 'यह देखिए तमिलनाडु के 65 वर्षीय किसान को क्या दिखेगा:',
-    userMsg: 'मैं तमिलनाडु का 65 वर्षीय किसान हूं',
-    aiMsg: 'तमिलनाडु के 65 वर्षीय किसान होने के नाते, आप PM-KISAN योजना (₹6,000/वर्ष) और उझावर पथुक्काप्पु थिट्टम (₹2 लाख दुर्घटना बीमा) के लिए पात्र हो सकते हैं। आप पहले किस राज्य योजना के लिए आवेदन करना चाहेंगे?',
-    centralHeader: 'केंद्र सरकार की योजनाएं',
-    stateHeader: 'तमिलनाडु राज्य की योजनाएं',
-    schemeCards: [
-      { name: 'PM-KISAN Samman Nidhi', nameLocal: 'पीएम-किसान सम्मान निधि', ministry: 'कृषि मंत्रालय', benefit: '₹6,000/वर्ष', match: 95 },
-      { name: 'Ayushman Bharat PM-JAY', nameLocal: 'आयुष्मान भारत पीएम-जय', ministry: 'स्वास्थ्य मंत्रालय', benefit: '₹5 लाख/वर्ष स्वास्थ्य', match: 88 },
-    ],
-    stateScheme: { name: 'Uzhavar Pathukappu', nameLocal: 'उझावर पथुक्कप्पु', ministry: 'तमिलनाडु सरकार', benefit: '₹2 लाख बीमा', match: 92 },
-  },
-  cta: {
-    heading: 'आपके लाभ आपका इंतज़ार कर रहे हैं।',
-    subheading: 'बातचीत शुरू करें — कोई रजिस्ट्रेशन नहीं, कोई कागज़ी काम नहीं। बस बोलिए।',
-    startTalking: '🎙️ अभी बोलना शुरू करें',
-    voiceOnly: '👴 केवल-आवाज़ मोड',
-  },
-  footer: {
-    tagline: '• कल्याण नेविगेटर',
-    privacy: 'गोपनीयता', terms: 'शर्तें', about: 'हमारे बारे में', contact: 'संपर्क करें',
-    builtFor: '© 2026 Scheme-AI • भारत के लिए बनाया गया',
-  },
-  elderly: {
-    back: 'वापस',
-    greetingTitle: 'स्वागत है',
-    greetingBody: 'माइक्रोफ़ोन दबाएं और अपने बारे में बताएं',
-    trySaying: 'यह कहकर देखें:',
-    example: 'उदाहरण: "मेरा नाम रमन है, उम्र 65, तमिलनाडु, किसान"',
-    listening: 'सुन रहे हैं...',
-    pressToSpeak: 'बोलने के लिए दबाएं',
-    youSaid: 'आपने कहा:',
-    findingSchemes: 'आपकी योजनाएं खोजी जा रही हैं...',
-    replyLabel: 'Scheme-AI का जवाब:',
-    playAgain: 'फिर से सुनें',
-    centralSchemes: 'केंद्र सरकार की योजनाएं',
-    stateSchemes: 'राज्य योजनाएं',
-    helpLine: '📞 मदद चाहिए? — यह किसी परिवार के सदस्य या ग्राम पंचायत अधिकारी को दिखाएं',
-    applyNow: 'अभी आवेदन करें',
-    errorMsg: 'क्षमा करें, कृपया फिर से प्रयास करें।',
-  },
-  schemes: {
-    title: 'सभी सरकारी योजनाएं देखें',
-    subtitle: 'केंद्र व राज्य योजनाएं — नाम, श्रेणी या राज्य से खोजें',
-    searchPlaceholder: 'योजनाएं खोजें जैसे PM-KISAN, छात्रवृत्ति, आवास...',
-    searchButton: 'खोजें',
-    allStates: 'सभी राज्य',
-    showing: 'दिखा रहे हैं', of: 'में से', schemesWord: 'योजनाएं', inWord: 'में', forWord: 'के लिए',
-    loading: 'योजनाएं लोड हो रही हैं...',
-    noResults: 'कोई योजना नहीं मिली। अलग फ़िल्टर आज़माएं।',
-    clearFilters: 'फ़िल्टर हटाएं',
-    benefit: 'लाभ',
-    central: 'केंद्रीय',
-    apply: 'आवेदन करें →',
-    prev: '← पिछला', next: 'अगला →', page: 'पृष्ठ',
-    ctaQuestion: 'निश्चित नहीं कि आप किस योजना के लिए पात्र हैं?',
-    ctaButton: '🎙️ AI से बात करें — अपनी योजनाएं खोजें',
-    categories: {
-      All: 'सभी', Agriculture: 'कृषि', Education: 'शिक्षा', Health: 'स्वास्थ्य',
-      Housing: 'आवास', 'Women & Child': 'महिला व बाल', Finance: 'वित्त',
-      Employment: 'रोजगार', Disability: 'विकलांगता',
-    },
-  },
+const toCard = (s) => ({
+  id: s._id ? String(s._id) : undefined,
+  name: s.name || 'Unknown Scheme',
+  ministry: s.ministry || (s.state && s.state !== 'Central' ? `Government of ${s.state}` : 'Government of India'),
+  benefit: s.benefit || 'Check official portal',
+  category: s.category || 'Other',
+  state: s.state || 'Central',
+  eligibility: Math.min(Math.max(s.matchScore || 45, 40), 95), // 0-100 score the UI already uses
+  reason: s.reason || 'May match your situation — verify at the official portal',
+  applyLink: cleanLink(s.applyLink),
+  eligibilityCriteria: cleanCriteria(s.eligibilityCriteria),
+  documents: Array.isArray(s.documents) ? s.documents : [],
+})
+
+const publicProfile = (p = {}) => Object.fromEntries(Object.entries(p).filter(([k]) => !k.startsWith('_')))
+const hasSignal = (p) => !!(p.occupation || Number.isFinite(p.age) || p.need_category?.length || p.caste || p.is_widow || p.is_disabled || p.gender)
+
+function dedupe(list) {
+  const seen = []
+  return list.filter((s) => {
+    const n = normalizeName(s.name)
+    if (seen.some((x) => x.includes(n) || n.includes(x))) return false
+    seen.push(n)
+    return true
+  })
 }
 
-const ta = {
-  nav: {
-    home: 'முகப்பு', talkToAI: 'AI உடன் பேசுங்கள்', schemes: 'திட்டங்கள்',
-    scanId: 'ID ஸ்கேன் செய்யவும்', dashboard: 'டாஷ்போர்டு', speakNow: 'இப்போது பேசுங்கள்',
-  },
-  modeSelect: {
-    title: 'நீங்கள் எப்படி தொடர விரும்புகிறீர்கள்?',
-    subtitle: 'உங்களுக்கு எது எளிதோ அதைத் தேர்ந்தெடுக்கவும்',
-    textChatTitle: 'உரை அரட்டை',
-    textChatDesc: 'தட்டச்சு செய்யுங்கள் அல்லது பேசுங்கள், திரையில் முடிவுகளைப் பார்க்கவும்',
-    voiceOnlyTitle: 'குரல்-மட்டும் பயன்முறை',
-    voiceOnlyDesc: 'பெரிய பொத்தான்கள், பேசப்படும் பதில்கள் — எளிதான பயன்பாட்டிற்காக உருவாக்கப்பட்டது',
-  },
-  hero: {
-    badge: '✦ ஹேக்கத்தான் 3.0 — சமூக நலனுக்கான ஜெனரேட்டிவ் AI',
-    titleLine1: 'ஒரு முறை பேசுங்கள்.',
-    titleLine2: 'உங்களுக்கு உரிய அனைத்தையும்',
-    titleHighlight: 'பெறுங்கள்.',
-    subtitle: 'ஒவ்வொரு ஆண்டும் லட்சக்கணக்கான கோடி மதிப்புள்ள இந்திய நலத் திட்டங்கள் கோரப்படாமல் இருக்கின்றன — மக்கள் தகுதி இல்லாததால் அல்ல, யாரும் அவர்களிடம் சொல்லாததால். Scheme-AI உங்கள் கதையைக் கேட்டு, அதில் மறைந்திருக்கும் திட்டங்களைக் கண்டுபிடிக்கிறது.',
-    startTalking: 'பேச தொடங்குங்கள் →',
-    browseSchemes: 'திட்டங்களை பார்வையிடுங்கள்',
-    tapToSpeak: 'எந்த மொழியிலும் தட்டி பேசுங்கள்',
-    sampleAnswerLabel: 'மாதிரி பதில்',
-    samples: [
-      'நீங்கள் 4 திட்டங்களுக்கு தகுதியுடையவர். அருகிலுள்ள திட்டம் உங்கள் குடும்பத்திற்கு மாதம் ₹1,000 தருகிறது, ரேஷன் கார்டு மட்டும் தேவை.',
-      'தமிழ்நாட்டைச் சேர்ந்த 65 வயது விவசாயி என்பதால், நீங்கள் PM-KISAN மற்றும் உழவர் பாதுகாப்பு திட்டத்திற்கு தகுதியுடையவர்.',
-      'உங்கள் மகள் மூவலூர் இராமாமிர்தம் அம்மையார் திட்டத்திற்கு தகுதியுடையவர் — இலவச சைக்கிள் + ₹1,000 பணம்.',
-    ],
-  },
-  stats: [
-    { value: '50 கோடி+', label: 'சேவை எட்டாத குடிமக்கள்' },
-    { value: '2,000+', label: 'மத்திய & மாநில திட்டங்கள்' },
-    { value: '12+', label: 'இந்திய மொழிகள்' },
-    { value: '28', label: 'திட்டமிடப்பட்ட மாநிலங்கள்' },
-  ],
-  features: {
-    heading: 'ஆன்லைனில் ஒரு படிவத்தை கூட நிரப்பியிராதவருக்காக உருவாக்கப்பட்டது',
-    subheading: 'பெரும்பாலான நல தொழில்நுட்பங்கள், அரசு நடைமுறைகளை ஏற்கனவே அறிந்தவர்களுக்காக உருவாக்கப்பட்டவை. நாங்கள் இதை மற்ற அனைவருக்காகவும் உருவாக்கினோம்.',
-    items: [
-      { icon: '💬', title: 'பேசுங்கள் மட்டும், படிவம் தேவையில்லை', desc: 'உங்கள் வாழ்க்கையை ஒரு அண்டை வீட்டாரிடம் சொல்வது போல் சொல்லுங்கள். காகித வேலையை உதவியாளர் பார்த்துக்கொள்கிறார்.' },
-      { icon: '🗣️', title: 'உங்கள் மொழி, உங்கள் வார்த்தைகள்', desc: 'இந்தி, தமிழ், தெலுங்கு, வங்காளம் மற்றும் பல — பேசி கேளுங்கள், பேசி பதில் பெறுங்கள், தேவைப்பட்டால் எளிமையாக்கவும்.' },
-      { icon: '📄', title: 'உங்களுக்காக ஆவணங்கள் படிக்கப்படும்', desc: 'ஆதார் அல்லது ரேஷன் கார்டை ஸ்கேன் செய்யுங்கள், விவரங்கள் நேரடியாக உங்கள் விண்ணப்பத்தில் நிரப்பப்படும்.' },
-      { icon: '✅', title: 'நீங்கள் சரிபார்க்கக்கூடிய காரணங்கள்', desc: 'ஒவ்வொரு பொருத்தத்திற்கும் 0–100 மதிப்பெண் மற்றும் எளிய காரணம் — மறைவான முடிவெடுப்பு இல்லை, முகவர் கட்டணம் இல்லை.' },
-    ],
-  },
-  howItWorks: {
-    kicker: '4-அடுக்கு ப்ராம்ப்ட் சங்கிலி',
-    heading: 'உங்கள் வாக்கியத்திற்கும் உங்கள் பதிலுக்கும் இடையில் என்ன நடக்கிறது',
-    steps: [
-      { title: 'ப்ரொஃபைல் எக்ஸ்ட்ராக்டர்', desc: 'இயல்பான உரையாடலிலிருந்து AI உங்கள் வயது, தொழில், சாதி, வருமானம், மாநிலத்தை புரிந்துகொள்கிறது.' },
-      { title: 'RAG தேடல்', desc: 'உங்கள் விவரங்களைக் கொண்டு 2,000+ திட்டங்கள் உடனடியாக தேடப்படுகின்றன.' },
-      { title: 'தகுதி மதிப்பீடு', desc: 'ஒவ்வொரு திட்டத்திற்கும் 0–100 பொருத்த மதிப்பெண் மற்றும் எளிய காரணம் கிடைக்கும்.' },
-      { title: 'குரல் பதில்', desc: 'விண்ணப்ப இணைப்புகள் மற்றும் ஆவண பட்டியலுடன் முடிவுகள் உங்கள் மொழியில் பேசப்படும்.' },
-    ],
-  },
-  demo: {
-    heading: 'இதை செயலில் பாருங்கள்',
-    subheading: 'தமிழ்நாட்டைச் சேர்ந்த 65 வயது விவசாயி என்ன பார்ப்பார் என்பதை இங்கே காணலாம்:',
-    userMsg: 'நான் தமிழ்நாட்டைச் சேர்ந்த 65 வயது விவசாயி',
-    aiMsg: 'தமிழ்நாட்டைச் சேர்ந்த 65 வயது விவசாயி என்பதால், நீங்கள் PM-KISAN திட்டம் (₹6,000/ஆண்டு) மற்றும் உழவர் பாதுகாப்பு திட்டத்திற்கு (₹2 லட்சம் விபத்து காப்பீடு) தகுதியுடையவராக இருக்கலாம். முதலில் எந்த மாநில திட்டத்திற்கு விண்ணப்பிக்க விரும்புகிறீர்கள்?',
-    centralHeader: 'மத்திய அரசு திட்டங்கள்',
-    stateHeader: 'தமிழ்நாடு மாநில திட்டங்கள்',
-    schemeCards: [
-      { name: 'PM-KISAN Samman Nidhi', nameLocal: 'பிஎம்-கிசான் சம்மான் நிதி', ministry: 'வேளாண் அமைச்சகம்', benefit: '₹6,000/ஆண்டு', match: 95 },
-      { name: 'Ayushman Bharat PM-JAY', nameLocal: 'ஆயுஷ்மான் பாரத் பிஎம்-ஜே', ministry: 'சுகாதார அமைச்சகம்', benefit: '₹5 லட்சம்/ஆண்டு சுகாதாரம்', match: 88 },
-    ],
-    stateScheme: { name: 'Uzhavar Pathukappu', nameLocal: 'உழவர் பாதுகாப்பு திட்டம்', ministry: 'தமிழ்நாடு அரசு', benefit: '₹2 லட்சம் காப்பீடு', match: 92 },
-  },
-  cta: {
-    heading: 'உங்கள் நலன்கள் காத்திருக்கின்றன.',
-    subheading: 'ஒரு உரையாடலைத் தொடங்குங்கள் — பதிவு தேவையில்லை, காகிதவேலை தேவையில்லை. வெறும் பேசுங்கள்.',
-    startTalking: '🎙️ இப்போதே பேச தொடங்குங்கள்',
-    voiceOnly: '👴 குரல்-மட்டும் பயன்முறை',
-  },
-  footer: {
-    tagline: '• நல வழிகாட்டி',
-    privacy: 'தனியுரிமை', terms: 'விதிமுறைகள்', about: 'எங்களைப் பற்றி', contact: 'தொடர்பு',
-    builtFor: '© 2026 Scheme-AI • இந்தியாவுக்காக உருவாக்கப்பட்டது',
-  },
-  elderly: {
-    back: 'பின்செல்',
-    greetingTitle: 'வரவேற்கிறோம்',
-    greetingBody: 'மைக்ரோஃபோனை அழுத்தி உங்களைப் பற்றி சொல்லுங்கள்',
-    trySaying: 'இப்படி சொல்லிப் பாருங்கள்:',
-    example: 'உதாரணம்: "என் பெயர் ராமன், வயது 65, தமிழ்நாடு, விவசாயி"',
-    listening: 'கேட்கிறோம்...',
-    pressToSpeak: 'பேச அழுத்துங்கள்',
-    youSaid: 'நீங்கள் சொன்னது:',
-    findingSchemes: 'உங்கள் திட்டங்களைத் தேடுகிறோம்...',
-    replyLabel: 'Scheme-AI பதில்:',
-    playAgain: 'மீண்டும் கேளுங்கள்',
-    centralSchemes: 'மத்திய அரசு திட்டங்கள்',
-    stateSchemes: 'மாநில திட்டங்கள்',
-    helpLine: '📞 உதவி வேண்டுமா? — இதை ஒரு குடும்ப உறுப்பினர் அல்லது கிராம பஞ்சாயத்து அதிகாரியிடம் காட்டுங்கள்',
-    applyNow: 'இப்போது விண்ணப்பிக்கவும்',
-    errorMsg: 'மன்னிக்கவும், மீண்டும் முயற்சிக்கவும்.',
-  },
-  schemes: {
-    title: 'அனைத்து அரசு திட்டங்களையும் பார்வையிடுங்கள்',
-    subtitle: 'மத்திய & மாநில திட்டங்கள் — பெயர், வகை அல்லது மாநிலம் மூலம் தேடுங்கள்',
-    searchPlaceholder: 'திட்டங்களைத் தேடுங்கள் எ.கா. PM-KISAN, உதவித்தொகை, வீட்டுவசதி...',
-    searchButton: 'தேடு',
-    allStates: 'அனைத்து மாநிலங்கள்',
-    showing: 'காட்டுகிறது', of: 'இல்', schemesWord: 'திட்டங்கள்', inWord: 'இல்', forWord: 'க்கு',
-    loading: 'திட்டங்கள் ஏற்றப்படுகின்றன...',
-    noResults: 'திட்டங்கள் எதுவும் இல்லை. வேறு வடிகட்டிகளை முயற்சிக்கவும்.',
-    clearFilters: 'வடிகட்டிகளை அழி',
-    benefit: 'பலன்',
-    central: 'மத்திய',
-    apply: 'விண்ணப்பிக்க →',
-    prev: '← முந்தைய', next: 'அடுத்தது →', page: 'பக்கம்',
-    ctaQuestion: 'எந்த திட்டத்திற்கு தகுதி உண்டு என்று உறுதியாக தெரியவில்லையா?',
-    ctaButton: '🎙️ AI உடன் பேசுங்கள் — உங்கள் திட்டங்களைக் கண்டறியுங்கள்',
-    categories: {
-      All: 'அனைத்தும்', Agriculture: 'விவசாயம்', Education: 'கல்வி', Health: 'சுகாதாரம்',
-      Housing: 'வீட்டுவசதி', 'Women & Child': 'பெண்கள் & குழந்தைகள்', Finance: 'நிதி',
-      Employment: 'வேலைவாய்ப்பு', Disability: 'ஊனமுற்றோர்',
-    },
-  },
+// Ask for at most 2 times per field so we never nag
+function pickNextField(profile) {
+  const asked = profile._asked || {}
+  for (const f of ['state', 'occupation', 'age']) {
+    const known = f === 'age' ? Number.isFinite(profile.age) : !!profile[f]
+    if (!known && (asked[f] || 0) < 2) return f
+  }
+  return null
 }
 
-const te = {
-  nav: { home: 'హోమ్', talkToAI: 'AI తో మాట్లాడండి', schemes: 'పథకాలు', scanId: 'ID స్కాన్ చేయండి', dashboard: 'డాష్‌బోర్డ్', speakNow: 'ఇప్పుడు మాట్లాడండి' },
-  modeSelect: {
-    title: 'మీరు ఎలా కొనసాగించాలనుకుంటున్నారు?',
-    subtitle: 'మీకు సులభమైనదాన్ని ఎంచుకోండి',
-    textChatTitle: 'టెక్స్ట్ చాట్',
-    textChatDesc: 'టైప్ చేయండి లేదా మాట్లాడండి, స్క్రీన్‌పై ఫలితాలు చూడండి',
-    voiceOnlyTitle: 'వాయిస్-మాత్రమే మోడ్',
-    voiceOnlyDesc: 'పెద్ద బటన్లు, మాట్లాడే సమాధానాలు — సులభమైన వాడకం కోసం రూపొందించబడింది',
-  },
-  hero: {
-    badge: '✦ హ్యాకథాన్ 3.0 — సామాజిక ప్రభావం కోసం జనరేటివ్ AI',
-    titleLine1: 'ఒక్కసారి మాట్లాడండి.',
-    titleLine2: 'మీకు రావాల్సినవన్నీ',
-    titleHighlight: 'పొందండి.',
-    subtitle: 'ప్రతి సంవత్సరం లక్షల కోట్ల విలువైన భారత సంక్షేమ పథకాలు క్లెయిమ్ చేయబడకుండా మిగిలిపోతున్నాయి — ప్రజలు అర్హులు కానందుకు కాదు, ఎవరూ వారికి చెప్పనందుకు. Scheme-AI మీ కథను విని, అందులో దాగి ఉన్న పథకాలను కనుగొంటుంది.',
-    startTalking: 'మాట్లాడటం ప్రారంభించండి →',
-    browseSchemes: 'పథకాలను చూడండి',
-    tapToSpeak: 'ఏ భాషలోనైనా నొక్కి మాట్లాడండి',
-    sampleAnswerLabel: 'నమూనా సమాధానం',
-    samples: [
-      'మీరు 4 పథకాలకు అర్హులు. దగ్గరలోని పథకం మీ కుటుంబానికి ప్రతి నెలా ₹1,000 ఇస్తుంది, రేషన్ కార్డు మాత్రమే అవసరం.',
-      'తమిళనాడుకు చెందిన 65 ఏళ్ల రైతుగా, మీరు PM-KISAN మరియు ఉళవర్ పతుక్కాప్పు తిట్టం పథకాలకు అర్హులు.',
-      'మీ కుమార్తె మూవలూర్ రామామిర్తం అమ్మయ్యార్ పథకానికి అర్హురాలు — ఉచిత సైకిల్ + ₹1,000 నగదు.',
-    ],
-  },
-  stats: [
-    { value: '50 కోట్లు+', label: 'సేవలందని పౌరులు' },
-    { value: '2,000+', label: 'కేంద్ర & రాష్ట్ర పథకాలు' },
-    { value: '12+', label: 'భారతీయ భాషలు' },
-    { value: '28', label: 'రోడ్‌మ్యాప్‌లో రాష్ట్రాలు' },
-  ],
-  features: {
-    heading: 'ఆన్‌లైన్‌లో ఎప్పుడూ ఫారం నింపని వ్యక్తి కోసం రూపొందించబడింది',
-    subheading: 'చాలా సంక్షేమ సాంకేతికత ఇప్పటికే బ్యూరోక్రసీని ఎలా నావిగేట్ చేయాలో తెలిసిన వారి కోసం రూపొందించబడింది. మేము దీన్ని మిగతా అందరి కోసం రూపొందించాము.',
-    items: [
-      { icon: '💬', title: 'మాట్లాడండి చాలు, ఫారాలు వద్దు', desc: 'మీ జీవితాన్ని పొరుగువారికి చెప్పినట్లే చెప్పండి. కాగితం పని సహాయకుడు చూసుకుంటుంది.' },
-      { icon: '🗣️', title: 'మీ భాష, మీ మాటలు', desc: 'హిందీ, తమిళం, తెలుగు, బెంగాలీ మరియు మరిన్ని — మాట్లాడి అడగండి, మాట్లాడి సమాధానం పొందండి, అవసరమైతే సరళంగా.' },
-      { icon: '📄', title: 'పత్రాలు మీ కోసం చదవబడతాయి', desc: 'ఆధార్ లేదా రేషన్ కార్డును స్కాన్ చేయండి, వివరాలు నేరుగా మీ దరఖాస్తులో నింపబడతాయి.' },
-      { icon: '✅', title: 'మీరు తనిఖీ చేయగల కారణాలు', desc: 'ప్రతి మ్యాచ్‌కు 0–100 స్కోరు మరియు సాదా భాషలో కారణం — బ్లాక్ బాక్స్ లేదు, ఏజెంట్ ఫీజు లేదు.' },
-    ],
-  },
-  howItWorks: {
-    kicker: '4-లేయర్ ప్రాంప్ట్ చైన్',
-    heading: 'మీ వాక్యానికి మరియు మీ సమాధానానికి మధ్య ఏమి జరుగుతుంది',
-    steps: [
-      { title: 'ప్రొఫైల్ ఎక్స్‌ట్రాక్టర్', desc: 'సహజ సంభాషణ నుండి AI మీ వయస్సు, వృత్తి, కులం, ఆదాయం మరియు రాష్ట్రాన్ని చదువుతుంది.' },
-      { title: 'RAG సెర్చ్', desc: 'మీ ప్రొఫైల్‌ను క్వెరీగా ఉపయోగించి 2,000+ పథకాలు తక్షణమే శోధించబడతాయి.' },
-      { title: 'అర్హత స్కోరర్', desc: 'ప్రతి పథకానికి 0–100 మ్యాచ్ స్కోరు మరియు సాదా భాషలో కారణం లభిస్తుంది.' },
-      { title: 'వాయిస్ రిప్లై', desc: 'ఫలితాలు మీ భాషలో దరఖాస్తు లింక్‌లు మరియు పత్రాల చెక్‌లిస్ట్‌తో పలకబడతాయి.' },
-    ],
-  },
-  demo: {
-    heading: 'దీన్ని చర్యలో చూడండి',
-    subheading: 'తమిళనాడుకు చెందిన 65 ఏళ్ల రైతు ఏమి చూస్తారో ఇక్కడ ఉంది:',
-    userMsg: 'నేను తమిళనాడుకు చెందిన 65 ఏళ్ల రైతును',
-    aiMsg: 'తమిళనాడుకు చెందిన 65 ఏళ్ల రైతుగా, మీరు PM-KISAN పథకం (₹6,000/సంవత్సరం) మరియు ఉళవర్ పతుక్కాప్పు తిట్టం (₹2 లక్షల ప్రమాద బీమా)కు అర్హులు కావచ్చు. మీరు మొదట ఏ రాష్ట్ర పథకానికి దరఖాస్తు చేయాలనుకుంటున్నారు?',
-    centralHeader: 'కేంద్ర ప్రభుత్వ పథకాలు',
-    stateHeader: 'తమిళనాడు రాష్ట్ర పథకాలు',
-    schemeCards: [
-      { name: 'PM-KISAN Samman Nidhi', nameLocal: 'పీఎం-కిసాన్ సమ్మాన్ నిధి', ministry: 'వ్యవసాయ మంత్రిత్వ శాఖ', benefit: '₹6,000/సంవత్సరం', match: 95 },
-      { name: 'Ayushman Bharat PM-JAY', nameLocal: 'ఆయుష్మాన్ భారత్ పీఎం-జే', ministry: 'ఆరోగ్య మంత్రిత్వ శాఖ', benefit: '₹5 లక్షలు/సంవత్సరం ఆరోగ్యం', match: 88 },
-    ],
-    stateScheme: { name: 'Uzhavar Pathukappu', nameLocal: 'ఉళవర్ పతుక్కాప్పు', ministry: 'తమిళనాడు ప్రభుత్వం', benefit: '₹2 లక్షల బీమా', match: 92 },
-  },
-  cta: {
-    heading: 'మీ ప్రయోజనాలు వేచి ఉన్నాయి.',
-    subheading: 'సంభాషణ ప్రారంభించండి — నమోదు అవసరం లేదు, కాగితం పని అవసరం లేదు. మాట్లాడండి చాలు.',
-    startTalking: '🎙️ ఇప్పుడే మాట్లాడటం ప్రారంభించండి',
-    voiceOnly: '👴 వాయిస్-మాత్రమే మోడ్',
-  },
-  footer: {
-    tagline: '• సంక్షేమ నావిగేటర్',
-    privacy: 'గోప్యత', terms: 'నిబంధనలు', about: 'మా గురించి', contact: 'సంప్రదించండి',
-    builtFor: '© 2026 Scheme-AI • భారతదేశం కోసం రూపొందించబడింది',
-  },
-  elderly: {
-    back: 'వెనుకకు',
-    greetingTitle: 'స్వాగతం',
-    greetingBody: 'మైక్రోఫోన్ నొక్కి మీ గురించి చెప్పండి',
-    trySaying: 'ఇలా చెప్పి చూడండి:',
-    example: 'ఉదాహరణ: "నా పేరు రామన్, వయస్సు 65, తమిళనాడు, రైతు"',
-    listening: 'వింటున్నాము...',
-    pressToSpeak: 'మాట్లాడటానికి నొక్కండి',
-    youSaid: 'మీరు చెప్పింది:',
-    findingSchemes: 'మీ పథకాలను వెతుకుతున్నాము...',
-    replyLabel: 'Scheme-AI సమాధానం:',
-    playAgain: 'మళ్ళీ వినండి',
-    centralSchemes: 'కేంద్ర ప్రభుత్వ పథకాలు',
-    stateSchemes: 'రాష్ట్ర పథకాలు',
-    helpLine: '📞 సహాయం కావాలా? — దీన్ని కుటుంబ సభ్యుడికి లేదా గ్రామ పంచాయతీ అధికారికి చూపించండి',
-    applyNow: 'ఇప్పుడే దరఖాస్తు చేయండి',
-    errorMsg: 'క్షమించండి, దయచేసి మళ్ళీ ప్రయత్నించండి.',
-  },
-  schemes: {
-    title: 'అన్ని ప్రభుత్వ పథకాలను చూడండి',
-    subtitle: 'కేంద్ర & రాష్ట్ర పథకాలు — పేరు, వర్గం లేదా రాష్ట్రం ద్వారా వెతకండి',
-    searchPlaceholder: 'పథకాలను వెతకండి ఉదా. PM-KISAN, స్కాలర్‌షిప్, గృహనిర్మాణం...',
-    searchButton: 'వెతకండి',
-    allStates: 'అన్ని రాష్ట్రాలు',
-    showing: 'చూపిస్తోంది', of: 'లో', schemesWord: 'పథకాలు', inWord: 'లో', forWord: 'కోసం',
-    loading: 'పథకాలు లోడ్ అవుతున్నాయి...',
-    noResults: 'పథకాలు కనుగొనబడలేదు. వేరే ఫిల్టర్లు ప్రయత్నించండి.',
-    clearFilters: 'ఫిల్టర్లను తొలగించండి',
-    benefit: 'ప్రయోజనం',
-    central: 'కేంద్ర',
-    apply: 'దరఖాస్తు చేయండి →',
-    prev: '← మునుపటి', next: 'తదుపరి →', page: 'పేజీ',
-    ctaQuestion: 'మీరు ఏ పథకానికి అర్హులో ఖచ్చితంగా తెలియదా?',
-    ctaButton: '🎙️ AI తో మాట్లాడండి — మీ పథకాలను కనుగొనండి',
-    categories: {
-      All: 'అన్నీ', Agriculture: 'వ్యవసాయం', Education: 'విద్య', Health: 'ఆరోగ్యం',
-      Housing: 'గృహనిర్మాణం', 'Women & Child': 'మహిళలు & పిల్లలు', Finance: 'ఆర్థిక',
-      Employment: 'ఉద్యోగం', Disability: 'వికలాంగత',
-    },
-  },
-}
+router.post('/message', async (req, res) => {
+  const { message: raw, alternatives = [], sessionId, language: langIn = 'English', languageCode, mode = 'text', confirmed = false } = req.body
+  const language = NAME_BY_CODE[languageCode] || langIn
+  const message = String(raw || alternatives[0] || '').trim().slice(0, 1000)
+  if (!message) return res.status(400).json({ error: 'Message is required' })
 
-const bn = {
-  nav: { home: 'হোম', talkToAI: 'AI-এর সাথে কথা বলুন', schemes: 'প্রকল্প', scanId: 'আইডি স্ক্যান করুন', dashboard: 'ড্যাশবোর্ড', speakNow: 'এখন বলুন' },
-  modeSelect: {
-    title: 'আপনি কীভাবে এগিয়ে যেতে চান?',
-    subtitle: 'আপনার জন্য যা সহজ তা বেছে নিন',
-    textChatTitle: 'টেক্সট চ্যাট',
-    textChatDesc: 'টাইপ করুন বা বলুন, স্ক্রিনে ফলাফল দেখুন',
-    voiceOnlyTitle: 'শুধু-ভয়েস মোড',
-    voiceOnlyDesc: 'বড় বোতাম, কথ্য উত্তর — সহজ ব্যবহারের জন্য তৈরি',
-  },
-  hero: {
-    badge: '✦ হ্যাকাথন ৩.০ — সামাজিক প্রভাবের জন্য জেনারেটিভ AI',
-    titleLine1: 'একবার বলুন।',
-    titleLine2: 'আপনার প্রাপ্য সবকিছু',
-    titleHighlight: 'দাবি করুন।',
-    subtitle: 'প্রতি বছর লক্ষ কোটি টাকার ভারতীয় কল্যাণ সুবিধা দাবি না করেই থেকে যায় — মানুষ যোগ্য নয় বলে নয়, বরং কেউ তাদের বলেনি বলে। Scheme-AI আপনার গল্প শুনে তার মধ্যে লুকিয়ে থাকা প্রকল্পগুলো খুঁজে বের করে।',
-    startTalking: 'কথা বলা শুরু করুন →',
-    browseSchemes: 'প্রকল্পগুলো দেখুন',
-    tapToSpeak: 'যেকোনো ভাষায় ট্যাপ করে বলুন',
-    sampleAnswerLabel: 'নমুনা উত্তর',
-    samples: [
-      'আপনি ৪টি প্রকল্পের জন্য যোগ্য। সবচেয়ে কাছেরটি আপনার পরিবারকে প্রতি মাসে ₹১,০০০ দেয় এবং শুধু রেশন কার্ড প্রয়োজন।',
-      'তামিলনাড়ুর ৬৫ বছর বয়সী কৃষক হিসেবে, আপনি PM-KISAN এবং উঝাভার পাথুক্কাপ্পু থিট্টামের জন্য যোগ্য।',
-      'আপনার মেয়ে মূভালুর রামামির্থম আম্মাইয়ার প্রকল্পের জন্য যোগ্য — বিনামূল্যে সাইকেল + ₹১,০০০ নগদ।',
-    ],
-  },
-  stats: [
-    { value: '৫০ কোটি+', label: 'সেবাবঞ্চিত নাগরিক' },
-    { value: '২,০০০+', label: 'কেন্দ্রীয় ও রাজ্য প্রকল্প' },
-    { value: '১২+', label: 'ভারতীয় ভাষা' },
-    { value: '২৮', label: 'রোডম্যাপে রাজ্য' },
-  ],
-  features: {
-    heading: 'যে ব্যক্তি কখনো অনলাইনে ফর্ম পূরণ করেননি তার জন্য তৈরি',
-    subheading: 'বেশিরভাগ কল্যাণ প্রযুক্তি তাদের জন্য তৈরি যারা ইতিমধ্যে আমলাতন্ত্র চিনে। আমরা এটি বাকি সবার জন্য তৈরি করেছি।',
-    items: [
-      { icon: '💬', title: 'শুধু কথা বলুন, ফর্ম নয়', desc: 'প্রতিবেশীর কাছে যেভাবে বলতেন সেভাবে আপনার জীবনের কথা বলুন। কাগজপত্রের কাজ সহকারী করে।' },
-      { icon: '🗣️', title: 'আপনার ভাষা, আপনার কথা', desc: 'হিন্দি, তামিল, তেলুগু, বাংলা এবং আরও অনেক — কথা বলে জিজ্ঞাসা করুন, কথা বলে উত্তর পান, প্রয়োজনে সহজ করে।' },
-      { icon: '📄', title: 'নথিপত্র আপনার জন্য পড়া হয়', desc: 'আধার বা রেশন কার্ড স্ক্যান করুন এবং তথ্য সরাসরি আপনার আবেদনে চলে যায়।' },
-      { icon: '✅', title: 'আপনি যাচাই করতে পারেন এমন কারণ', desc: 'প্রতিটি ম্যাচে ০–১০০ স্কোর এবং সহজ ভাষায় কারণ থাকে — কোনো ব্ল্যাক বক্স নেই, এজেন্ট ফি নেই।' },
-    ],
-  },
-  howItWorks: {
-    kicker: '৪-স্তর প্রম্পট চেইন',
-    heading: 'আপনার বাক্য এবং আপনার উত্তরের মধ্যে কী ঘটে',
-    steps: [
-      { title: 'প্রোফাইল এক্সট্র্যাক্টর', desc: 'স্বাভাবিক কথোপকথন থেকে AI আপনার বয়স, পেশা, জাত, আয় এবং রাজ্য বোঝে।' },
-      { title: 'RAG সার্চ', desc: 'আপনার প্রোফাইলকে কোয়েরি হিসেবে ব্যবহার করে ২,০০০+ প্রকল্প তাৎক্ষণিকভাবে খোঁজা হয়।' },
-      { title: 'যোগ্যতা স্কোরার', desc: 'প্রতিটি প্রকল্পের জন্য ০–১০০ ম্যাচ স্কোর এবং সহজ ভাষায় কারণ পাওয়া যায়।' },
-      { title: 'ভয়েস রিপ্লাই', desc: 'ফলাফল আপনার ভাষায় বলা হয়, সাথে আবেদন লিঙ্ক এবং নথির তালিকা।' },
-    ],
-  },
-  demo: {
-    heading: 'এটি কাজ করতে দেখুন',
-    subheading: 'তামিলনাড়ুর ৬৫ বছর বয়সী কৃষক কী দেখবেন তা এখানে:',
-    userMsg: 'আমি তামিলনাড়ুর ৬৫ বছর বয়সী একজন কৃষক',
-    aiMsg: 'তামিলনাড়ুর ৬৫ বছর বয়সী কৃষক হিসেবে, আপনি PM-KISAN প্রকল্প (₹৬,০০০/বছর) এবং উঝাভার পাথুক্কাপ্পু থিট্টামের (₹২ লক্ষ দুর্ঘটনা বীমা) জন্য যোগ্য হতে পারেন। আপনি প্রথমে কোন রাজ্য প্রকল্পের জন্য আবেদন করতে চান?',
-    centralHeader: 'কেন্দ্রীয় সরকারের প্রকল্প',
-    stateHeader: 'তামিলনাড়ু রাজ্যের প্রকল্প',
-    schemeCards: [
-      { name: 'PM-KISAN Samman Nidhi', nameLocal: 'পিএম-কিষান সম্মান নিধি', ministry: 'কৃষি মন্ত্রণালয়', benefit: '₹৬,০০০/বছর', match: 95 },
-      { name: 'Ayushman Bharat PM-JAY', nameLocal: 'আয়ুষ্মান ভারত পিএম-জে', ministry: 'স্বাস্থ্য মন্ত্রণালয়', benefit: '₹৫ লক্ষ/বছর স্বাস্থ্য', match: 88 },
-    ],
-    stateScheme: { name: 'Uzhavar Pathukappu', nameLocal: 'উঝাভার পাথুক্কাপ্পু', ministry: 'তামিলনাড়ু সরকার', benefit: '₹২ লক্ষ বীমা', match: 92 },
-  },
-  cta: {
-    heading: 'আপনার সুবিধা অপেক্ষা করছে।',
-    subheading: 'একটি কথোপকথন শুরু করুন — কোনো নিবন্ধন নেই, কোনো কাগজপত্র নেই। শুধু বলুন।',
-    startTalking: '🎙️ এখনই কথা বলা শুরু করুন',
-    voiceOnly: '👴 শুধু-ভয়েস মোড',
-  },
-  footer: {
-    tagline: '• কল্যাণ নেভিগেটর',
-    privacy: 'গোপনীয়তা', terms: 'শর্তাবলী', about: 'আমাদের সম্পর্কে', contact: 'যোগাযোগ',
-    builtFor: '© ২০২৬ Scheme-AI • ভারতের জন্য তৈরি',
-  },
-  elderly: {
-    back: 'ফিরে যান',
-    greetingTitle: 'স্বাগতম',
-    greetingBody: 'মাইক্রোফোন চাপুন এবং নিজের সম্পর্কে বলুন',
-    trySaying: 'এভাবে বলে দেখুন:',
-    example: 'উদাহরণ: "আমার নাম রমন, বয়স ৬৫, তামিলনাড়ু, কৃষক"',
-    listening: 'শুনছি...',
-    pressToSpeak: 'বলতে চাপুন',
-    youSaid: 'আপনি বলেছেন:',
-    findingSchemes: 'আপনার প্রকল্পগুলো খোঁজা হচ্ছে...',
-    replyLabel: 'Scheme-AI-এর উত্তর:',
-    playAgain: 'আবার শুনুন',
-    centralSchemes: 'কেন্দ্রীয় সরকারের প্রকল্প',
-    stateSchemes: 'রাজ্য প্রকল্প',
-    helpLine: '📞 সাহায্য দরকার? — এটি পরিবারের কাউকে বা গ্রাম পঞ্চায়েত কর্মকর্তাকে দেখান',
-    applyNow: 'এখনই আবেদন করুন',
-    errorMsg: 'দুঃখিত, আবার চেষ্টা করুন।',
-  },
-  schemes: {
-    title: 'সমস্ত সরকারি প্রকল্প দেখুন',
-    subtitle: 'কেন্দ্রীয় ও রাজ্য প্রকল্প — নাম, বিভাগ বা রাজ্য দিয়ে খুঁজুন',
-    searchPlaceholder: 'প্রকল্প খুঁজুন যেমন PM-KISAN, বৃত্তি, আবাসন...',
-    searchButton: 'খুঁজুন',
-    allStates: 'সব রাজ্য',
-    showing: 'দেখাচ্ছে', of: 'এর মধ্যে', schemesWord: 'প্রকল্প', inWord: 'তে', forWord: 'জন্য',
-    loading: 'প্রকল্প লোড হচ্ছে...',
-    noResults: 'কোনো প্রকল্প পাওয়া যায়নি। ভিন্ন ফিল্টার চেষ্টা করুন।',
-    clearFilters: 'ফিল্টার সাফ করুন',
-    benefit: 'সুবিধা',
-    central: 'কেন্দ্রীয়',
-    apply: 'আবেদন করুন →',
-    prev: '← পূর্ববর্তী', next: 'পরবর্তী →', page: 'পাতা',
-    ctaQuestion: 'কোন প্রকল্পের জন্য আপনি যোগ্য তা নিশ্চিত নন?',
-    ctaButton: '🎙️ AI-এর সাথে কথা বলুন — আপনার প্রকল্প খুঁজুন',
-    categories: {
-      All: 'সব', Agriculture: 'কৃষি', Education: 'শিক্ষা', Health: 'স্বাস্থ্য',
-      Housing: 'আবাসন', 'Women & Child': 'নারী ও শিশু', Finance: 'অর্থ',
-      Employment: 'কর্মসংস্থান', Disability: 'প্রতিবন্ধিতা',
-    },
-  },
-}
+  const sid = sessionId || uuidv4()
 
-const mr = {
-  nav: { home: 'मुख्यपृष्ठ', talkToAI: 'AI शी बोला', schemes: 'योजना', scanId: 'ID स्कॅन करा', dashboard: 'डॅशबोर्ड', speakNow: 'आता बोला' },
-  modeSelect: {
-    title: 'तुम्ही कसे पुढे जाऊ इच्छिता?',
-    subtitle: 'तुमच्यासाठी जे सोपे असेल ते निवडा',
-    textChatTitle: 'टेक्स्ट चॅट',
-    textChatDesc: 'टाइप करा किंवा बोला, स्क्रीनवर निकाल पहा',
-    voiceOnlyTitle: 'फक्त-आवाज मोड',
-    voiceOnlyDesc: 'मोठी बटणे, बोललेली उत्तरे — सोप्या वापरासाठी तयार केले',
-  },
-  hero: {
-    badge: '✦ हॅकाथॉन ३.० — सामाजिक प्रभावासाठी जनरेटिव्ह AI',
-    titleLine1: 'एकदा बोला.',
-    titleLine2: 'तुमचा हक्क असलेले सर्व काही',
-    titleHighlight: 'मिळवा.',
-    subtitle: 'दरवर्षी लाखो कोटी रुपयांच्या भारतीय कल्याणकारी योजना दावा न करता राहतात — लोक पात्र नसल्यामुळे नाही, तर कोणीही त्यांना सांगितले नाही म्हणून. Scheme-AI तुमची गोष्ट ऐकून त्यात लपलेल्या योजना शोधते.',
-    startTalking: 'बोलायला सुरुवात करा →',
-    browseSchemes: 'योजना पहा',
-    tapToSpeak: 'कोणत्याही भाषेत टॅप करून बोला',
-    sampleAnswerLabel: 'नमुना उत्तर',
-    samples: [
-      'तुम्ही ४ योजनांसाठी पात्र आहात. सर्वात जवळची योजना तुमच्या कुटुंबाला दरमहा ₹१,००० देते आणि फक्त रेशन कार्ड आवश्यक आहे.',
-      'तमिळनाडूच्या ६५ वर्षीय शेतकऱ्याप्रमाणे, तुम्ही PM-KISAN आणि उझावर पथुक्कप्पू थिट्टमसाठी पात्र आहात.',
-      'तुमची मुलगी मूवलूर रामामिर्थम अम्मैयार योजनेसाठी पात्र आहे — मोफत सायकल + ₹१,००० रोख.',
-    ],
-  },
-  stats: [
-    { value: '५० कोटी+', label: 'सेवावंचित नागरिक' },
-    { value: '२,०००+', label: 'केंद्र व राज्य योजना' },
-    { value: '१२+', label: 'भारतीय भाषा' },
-    { value: '२८', label: 'योजनेत समाविष्ट राज्ये' },
-  ],
-  features: {
-    heading: 'ज्याने कधीही ऑनलाइन फॉर्म भरला नाही अशा व्यक्तीसाठी तयार केले',
-    subheading: 'बहुतेक कल्याण तंत्रज्ञान अशा लोकांसाठी बनवले आहे ज्यांना आधीच सरकारी प्रक्रिया माहीत आहे. आम्ही हे बाकी सर्वांसाठी बनवले आहे.',
-    items: [
-      { icon: '💬', title: 'फक्त बोला, फॉर्म नाही', desc: 'शेजाऱ्याला सांगावे तसे तुमचे आयुष्य सांगा. कागदपत्रांचे काम सहाय्यक करतो.' },
-      { icon: '🗣️', title: 'तुमची भाषा, तुमचे शब्द', desc: 'हिंदी, तमिळ, तेलुगू, बंगाली आणि बरेच काही — बोलून विचारा, बोलून उत्तर मिळवा, गरज पडल्यास सोपे करून.' },
-      { icon: '📄', title: 'कागदपत्रे तुमच्यासाठी वाचली जातात', desc: 'आधार किंवा रेशन कार्ड स्कॅन करा आणि माहिती थेट तुमच्या अर्जात भरली जाते.' },
-      { icon: '✅', title: 'तुम्ही तपासू शकता अशी कारणे', desc: 'प्रत्येक जुळणीसाठी ०–१०० गुण आणि सोप्या भाषेत कारण — कोणताही ब्लॅक बॉक्स नाही, एजंट फी नाही.' },
-    ],
-  },
-  howItWorks: {
-    kicker: '४-स्तरीय प्रॉम्प्ट चेन',
-    heading: 'तुमच्या वाक्यात आणि तुमच्या उत्तरात काय घडते',
-    steps: [
-      { title: 'प्रोफाइल एक्स्ट्रॅक्टर', desc: 'नैसर्गिक संभाषणातून AI तुमचे वय, व्यवसाय, जात, उत्पन्न आणि राज्य समजून घेते.' },
-      { title: 'RAG सर्च', desc: 'तुमच्या प्रोफाइलला क्वेरी म्हणून वापरून २,०००+ योजना त्वरित शोधल्या जातात.' },
-      { title: 'पात्रता स्कोअरर', desc: 'प्रत्येक योजनेला ०–१०० जुळणी गुण आणि सोप्या भाषेत कारण मिळते.' },
-      { title: 'व्हॉइस रिप्लाय', desc: 'निकाल तुमच्या भाषेत अर्ज लिंक आणि कागदपत्रांच्या यादीसह बोलले जातात.' },
-    ],
-  },
-  demo: {
-    heading: 'हे कृतीत पहा',
-    subheading: 'तमिळनाडूचा ६५ वर्षीय शेतकरी काय पाहील ते येथे आहे:',
-    userMsg: 'मी तमिळनाडूचा ६५ वर्षीय शेतकरी आहे',
-    aiMsg: 'तमिळनाडूच्या ६५ वर्षीय शेतकऱ्याप्रमाणे, तुम्ही PM-KISAN योजना (₹६,०००/वर्ष) आणि उझावर पथुक्कप्पू थिट्टम (₹२ लाख अपघात विमा) साठी पात्र असू शकता. तुम्हाला आधी कोणत्या राज्य योजनेसाठी अर्ज करायचा आहे?',
-    centralHeader: 'केंद्र सरकारच्या योजना',
-    stateHeader: 'तमिळनाडू राज्याच्या योजना',
-    schemeCards: [
-      { name: 'PM-KISAN Samman Nidhi', nameLocal: 'पीएम-किसान सन्मान निधी', ministry: 'कृषी मंत्रालय', benefit: '₹6,000/वर्ष', match: 95 },
-      { name: 'Ayushman Bharat PM-JAY', nameLocal: 'आयुष्मान भारत पीएम-जय', ministry: 'आरोग्य मंत्रालय', benefit: '₹5 लाख/वर्ष आरोग्य', match: 88 },
-    ],
-    stateScheme: { name: 'Uzhavar Pathukappu', nameLocal: 'उझावर पथुक्कप्पू', ministry: 'तमिळनाडू सरकार', benefit: '₹2 लाख विमा', match: 92 },
-  },
-  cta: {
-    heading: 'तुमचे लाभ वाट पाहत आहेत.',
-    subheading: 'संभाषण सुरू करा — नोंदणी नाही, कागदपत्रे नाहीत. फक्त बोला.',
-    startTalking: '🎙️ आता बोलायला सुरुवात करा',
-    voiceOnly: '👴 फक्त-आवाज मोड',
-  },
-  footer: {
-    tagline: '• कल्याण नेव्हिगेटर',
-    privacy: 'गोपनीयता', terms: 'अटी', about: 'आमच्याबद्दल', contact: 'संपर्क',
-    builtFor: '© २०२६ Scheme-AI • भारतासाठी तयार केले',
-  },
-  elderly: {
-    back: 'मागे जा',
-    greetingTitle: 'स्वागत आहे',
-    greetingBody: 'माइक्रोफोन दाबा आणि स्वतःबद्दल सांगा',
-    trySaying: 'असे बोलून पहा:',
-    example: 'उदाहरण: "माझे नाव रमण आहे, वय ६५, तमिळनाडू, शेतकरी"',
-    listening: 'ऐकत आहोत...',
-    pressToSpeak: 'बोलण्यासाठी दाबा',
-    youSaid: 'तुम्ही म्हणालात:',
-    findingSchemes: 'तुमच्या योजना शोधत आहोत...',
-    replyLabel: 'Scheme-AI चे उत्तर:',
-    playAgain: 'पुन्हा ऐका',
-    centralSchemes: 'केंद्र सरकारच्या योजना',
-    stateSchemes: 'राज्य योजना',
-    helpLine: '📞 मदत हवी आहे? — हे कुटुंबातील सदस्याला किंवा ग्रामपंचायत अधिकाऱ्याला दाखवा',
-    applyNow: 'आता अर्ज करा',
-    errorMsg: 'क्षमस्व, कृपया पुन्हा प्रयत्न करा.',
-  },
-  schemes: {
-    title: 'सर्व सरकारी योजना पहा',
-    subtitle: 'केंद्र व राज्य योजना — नाव, श्रेणी किंवा राज्यानुसार शोधा',
-    searchPlaceholder: 'योजना शोधा उदा. PM-KISAN, शिष्यवृत्ती, गृहनिर्माण...',
-    searchButton: 'शोधा',
-    allStates: 'सर्व राज्ये',
-    showing: 'दाखवत आहे', of: 'पैकी', schemesWord: 'योजना', inWord: 'मध्ये', forWord: 'साठी',
-    loading: 'योजना लोड होत आहेत...',
-    noResults: 'कोणतीही योजना सापडली नाही. वेगळे फिल्टर वापरून पहा.',
-    clearFilters: 'फिल्टर साफ करा',
-    benefit: 'लाभ',
-    central: 'केंद्रीय',
-    apply: 'अर्ज करा →',
-    prev: '← मागील', next: 'पुढील →', page: 'पान',
-    ctaQuestion: 'तुम्ही कोणत्या योजनेसाठी पात्र आहात याची खात्री नाही?',
-    ctaButton: '🎙️ AI शी बोला — तुमच्या योजना शोधा',
-    categories: {
-      All: 'सर्व', Agriculture: 'कृषी', Education: 'शिक्षण', Health: 'आरोग्य',
-      Housing: 'गृहनिर्माण', 'Women & Child': 'महिला व बालक', Finance: 'वित्त',
-      Employment: 'रोजगार', Disability: 'अपंगत्व',
-    },
-  },
-}
+  try {
+    let session = await Session.findOne({ sessionId: sid })
+    if (!session) session = new Session({ sessionId: sid, language })
+    const history = session.messages.slice(-6).map((m) => ({ role: m.role, content: m.content }))
 
-const kn = {
-  nav: { home: 'ಮುಖಪುಟ', talkToAI: 'AI ಜೊತೆ ಮಾತನಾಡಿ', schemes: 'ಯೋಜನೆಗಳು', scanId: 'ID ಸ್ಕ್ಯಾನ್ ಮಾಡಿ', dashboard: 'ಡ್ಯಾಶ್‌ಬೋರ್ಡ್', speakNow: 'ಈಗ ಮಾತನಾಡಿ' },
-  modeSelect: {
-    title: 'ನೀವು ಹೇಗೆ ಮುಂದುವರಿಯಲು ಬಯಸುತ್ತೀರಿ?',
-    subtitle: 'ನಿಮಗೆ ಸುಲಭವಾದುದನ್ನು ಆಯ್ಕೆಮಾಡಿ',
-    textChatTitle: 'ಟೆಕ್ಸ್ಟ್ ಚಾಟ್',
-    textChatDesc: 'ಟೈಪ್ ಮಾಡಿ ಅಥವಾ ಮಾತನಾಡಿ, ಪರದೆಯ ಮೇಲೆ ಫಲಿತಾಂಶಗಳನ್ನು ನೋಡಿ',
-    voiceOnlyTitle: 'ಧ್ವನಿ-ಮಾತ್ರ ಮೋಡ್',
-    voiceOnlyDesc: 'ದೊಡ್ಡ ಬಟನ್‌ಗಳು, ಮಾತನಾಡುವ ಉತ್ತರಗಳು — ಸುಲಭ ಬಳಕೆಗಾಗಿ ರೂಪಿಸಲಾಗಿದೆ',
-  },
-  hero: {
-    badge: '✦ ಹ್ಯಾಕಥಾನ್ 3.0 — ಸಾಮಾಜಿಕ ಪರಿಣಾಮಕ್ಕಾಗಿ ಜನರೇಟಿವ್ AI',
-    titleLine1: 'ಒಮ್ಮೆ ಮಾತನಾಡಿ.',
-    titleLine2: 'ನಿಮಗೆ ಸೇರಬೇಕಾದ ಎಲ್ಲವನ್ನೂ',
-    titleHighlight: 'ಪಡೆಯಿರಿ.',
-    subtitle: 'ಪ್ರತಿ ವರ್ಷ ಲಕ್ಷಾಂತರ ಕೋಟಿ ಮೌಲ್ಯದ ಭಾರತೀಯ ಕಲ್ಯಾಣ ಸೌಲಭ್ಯಗಳು ಪಡೆಯದೆ ಉಳಿಯುತ್ತವೆ — ಜನರು ಅರ್ಹರಲ್ಲದ ಕಾರಣದಿಂದಲ್ಲ, ಬದಲಿಗೆ ಯಾರೂ ಅವರಿಗೆ ಹೇಳದ ಕಾರಣದಿಂದ. Scheme-AI ನಿಮ್ಮ ಕಥೆಯನ್ನು ಕೇಳಿ ಅದರಲ್ಲಿ ಅಡಗಿರುವ ಯೋಜನೆಗಳನ್ನು ಕಂಡುಹಿಡಿಯುತ್ತದೆ.',
-    startTalking: 'ಮಾತನಾಡಲು ಪ್ರಾರಂಭಿಸಿ →',
-    browseSchemes: 'ಯೋಜನೆಗಳನ್ನು ವೀಕ್ಷಿಸಿ',
-    tapToSpeak: 'ಯಾವುದೇ ಭಾಷೆಯಲ್ಲಿ ಟ್ಯಾಪ್ ಮಾಡಿ ಮಾತನಾಡಿ',
-    sampleAnswerLabel: 'ಮಾದರಿ ಉತ್ತರ',
-    samples: [
-      'ನೀವು 4 ಯೋಜನೆಗಳಿಗೆ ಅರ್ಹರಾಗಿದ್ದೀರಿ. ಹತ್ತಿರದ ಯೋಜನೆಯು ನಿಮ್ಮ ಕುಟುಂಬಕ್ಕೆ ಪ್ರತಿ ತಿಂಗಳು ₹1,000 ನೀಡುತ್ತದೆ ಮತ್ತು ರೇಷನ್ ಕಾರ್ಡ್ ಮಾತ್ರ ಅಗತ್ಯ.',
-      'ತಮಿಳುನಾಡಿನ 65 ವರ್ಷದ ರೈತರಾಗಿ, ನೀವು PM-KISAN ಮತ್ತು ಉಳವರ್ ಪತುಕ್ಕಪ್ಪು ತಿಟ್ಟಂಗೆ ಅರ್ಹರಾಗಿದ್ದೀರಿ.',
-      'ನಿಮ್ಮ ಮಗಳು ಮೂವಲೂರ್ ರಾಮಾಮಿರ್ತಂ ಅಮ್ಮೈಯಾರ್ ಯೋಜನೆಗೆ ಅರ್ಹಳು — ಉಚಿತ ಸೈಕಲ್ + ₹1,000 ನಗದು.',
-    ],
-  },
-  stats: [
-    { value: '50 ಕೋಟಿ+', label: 'ಸೇವೆ ತಲುಪದ ನಾಗರಿಕರು' },
-    { value: '2,000+', label: 'ಕೇಂದ್ರ & ರಾಜ್ಯ ಯೋಜನೆಗಳು' },
-    { value: '12+', label: 'ಭಾರತೀಯ ಭಾಷೆಗಳು' },
-    { value: '28', label: 'ರೋಡ್‌ಮ್ಯಾಪ್‌ನಲ್ಲಿರುವ ರಾಜ್ಯಗಳು' },
-  ],
-  features: {
-    heading: 'ಆನ್‌ಲೈನ್‌ನಲ್ಲಿ ಎಂದೂ ಫಾರ್ಮ್ ಭರ್ತಿ ಮಾಡದ ವ್ಯಕ್ತಿಗಾಗಿ ರೂಪಿಸಲಾಗಿದೆ',
-    subheading: 'ಹೆಚ್ಚಿನ ಕಲ್ಯಾಣ ತಂತ್ರಜ್ಞಾನವು ಈಗಾಗಲೇ ಆಡಳಿತಶಾಹಿಯನ್ನು ನ್ಯಾವಿಗೇಟ್ ಮಾಡಲು ತಿಳಿದಿರುವವರಿಗಾಗಿ ನಿರ್ಮಿಸಲಾಗಿದೆ. ನಾವು ಇದನ್ನು ಉಳಿದೆಲ್ಲರಿಗಾಗಿ ನಿರ್ಮಿಸಿದ್ದೇವೆ.',
-    items: [
-      { icon: '💬', title: 'ಮಾತನಾಡಿ ಸಾಕು, ಫಾರ್ಮ್ ಬೇಡ', desc: 'ನೆರೆಹೊರೆಯವರಿಗೆ ಹೇಳುವಂತೆ ನಿಮ್ಮ ಜೀವನವನ್ನು ವಿವರಿಸಿ. ಕಾಗದದ ಕೆಲಸವನ್ನು ಸಹಾಯಕ ನೋಡಿಕೊಳ್ಳುತ್ತದೆ.' },
-      { icon: '🗣️', title: 'ನಿಮ್ಮ ಭಾಷೆ, ನಿಮ್ಮ ಮಾತುಗಳು', desc: 'ಹಿಂದಿ, ತಮಿಳು, ತೆಲುಗು, ಬಂಗಾಳಿ ಮತ್ತು ಇನ್ನಷ್ಟು — ಮಾತನಾಡಿ ಕೇಳಿ, ಮಾತನಾಡಿ ಉತ್ತರ ಪಡೆಯಿರಿ, ಅಗತ್ಯವಿದ್ದರೆ ಸರಳಗೊಳಿಸಿ.' },
-      { icon: '📄', title: 'ದಾಖಲೆಗಳನ್ನು ನಿಮಗಾಗಿ ಓದಲಾಗುತ್ತದೆ', desc: 'ಆಧಾರ್ ಅಥವಾ ರೇಷನ್ ಕಾರ್ಡ್ ಸ್ಕ್ಯಾನ್ ಮಾಡಿ, ವಿವರಗಳು ನೇರವಾಗಿ ನಿಮ್ಮ ಅರ್ಜಿಗೆ ತುಂಬುತ್ತವೆ.' },
-      { icon: '✅', title: 'ನೀವು ಪರಿಶೀಲಿಸಬಹುದಾದ ಕಾರಣಗಳು', desc: 'ಪ್ರತಿ ಹೊಂದಾಣಿಕೆಗೆ 0–100 ಸ್ಕೋರ್ ಮತ್ತು ಸರಳ ಭಾಷೆಯಲ್ಲಿ ಕಾರಣ — ಬ್ಲ್ಯಾಕ್ ಬಾಕ್ಸ್ ಇಲ್ಲ, ಏಜೆಂಟ್ ಶುಲ್ಕ ಇಲ್ಲ.' },
-    ],
-  },
-  howItWorks: {
-    kicker: '4-ಪದರದ ಪ್ರಾಂಪ್ಟ್ ಚೈನ್',
-    heading: 'ನಿಮ್ಮ ವಾಕ್ಯ ಮತ್ತು ನಿಮ್ಮ ಉತ್ತರದ ನಡುವೆ ಏನಾಗುತ್ತದೆ',
-    steps: [
-      { title: 'ಪ್ರೊಫೈಲ್ ಎಕ್ಸ್‌ಟ್ರಾಕ್ಟರ್', desc: 'ಸಹಜ ಸಂಭಾಷಣೆಯಿಂದ AI ನಿಮ್ಮ ವಯಸ್ಸು, ಉದ್ಯೋಗ, ಜಾತಿ, ಆದಾಯ ಮತ್ತು ರಾಜ್ಯವನ್ನು ಅರ್ಥಮಾಡಿಕೊಳ್ಳುತ್ತದೆ.' },
-      { title: 'RAG ಹುಡುಕಾಟ', desc: 'ನಿಮ್ಮ ಪ್ರೊಫೈಲ್ ಅನ್ನು ಪ್ರಶ್ನೆಯಾಗಿ ಬಳಸಿ 2,000+ ಯೋಜನೆಗಳನ್ನು ತಕ್ಷಣ ಹುಡುಕಲಾಗುತ್ತದೆ.' },
-      { title: 'ಅರ್ಹತಾ ಸ್ಕೋರರ್', desc: 'ಪ್ರತಿ ಯೋಜನೆಗೆ 0–100 ಹೊಂದಾಣಿಕೆ ಸ್ಕೋರ್ ಮತ್ತು ಸರಳ ಭಾಷೆಯಲ್ಲಿ ಕಾರಣ ಸಿಗುತ್ತದೆ.' },
-      { title: 'ಧ್ವನಿ ಪ್ರತ್ಯುತ್ತರ', desc: 'ಫಲಿತಾಂಶಗಳನ್ನು ನಿಮ್ಮ ಭಾಷೆಯಲ್ಲಿ ಅರ್ಜಿ ಲಿಂಕ್‌ಗಳು ಮತ್ತು ದಾಖಲೆ ಪಟ್ಟಿಯೊಂದಿಗೆ ಹೇಳಲಾಗುತ್ತದೆ.' },
-    ],
-  },
-  demo: {
-    heading: 'ಇದನ್ನು ಕಾರ್ಯದಲ್ಲಿ ನೋಡಿ',
-    subheading: 'ತಮಿಳುನಾಡಿನ 65 ವರ್ಷದ ರೈತ ಏನು ನೋಡುತ್ತಾರೆ ಎಂಬುದು ಇಲ್ಲಿದೆ:',
-    userMsg: 'ನಾನು ತಮಿಳುನಾಡಿನ 65 ವರ್ಷದ ರೈತ',
-    aiMsg: 'ತಮಿಳುನಾಡಿನ 65 ವರ್ಷದ ರೈತರಾಗಿ, ನೀವು PM-KISAN ಯೋಜನೆ (₹6,000/ವರ್ಷ) ಮತ್ತು ಉಳವರ್ ಪತುಕ್ಕಪ್ಪು ತಿಟ್ಟಂ (₹2 ಲಕ್ಷ ಅಪಘಾತ ವಿಮೆ) ಗೆ ಅರ್ಹರಾಗಿರಬಹುದು. ನೀವು ಮೊದಲು ಯಾವ ರಾಜ್ಯ ಯೋಜನೆಗೆ ಅರ್ಜಿ ಸಲ್ಲಿಸಲು ಬಯಸುತ್ತೀರಿ?',
-    centralHeader: 'ಕೇಂದ್ರ ಸರ್ಕಾರದ ಯೋಜನೆಗಳು',
-    stateHeader: 'ತಮಿಳುನಾಡು ರಾಜ್ಯ ಯೋಜನೆಗಳು',
-    schemeCards: [
-      { name: 'PM-KISAN Samman Nidhi', nameLocal: 'ಪಿಎಂ-ಕಿಸಾನ್ ಸಮ್ಮಾನ್ ನಿಧಿ', ministry: 'ಕೃಷಿ ಸಚಿವಾಲಯ', benefit: '₹6,000/ವರ್ಷ', match: 95 },
-      { name: 'Ayushman Bharat PM-JAY', nameLocal: 'ಆಯುಷ್ಮಾನ್ ಭಾರತ್ ಪಿಎಂ-ಜೇ', ministry: 'ಆರೋಗ್ಯ ಸಚಿವಾಲಯ', benefit: '₹5 ಲಕ್ಷ/ವರ್ಷ ಆರೋಗ್ಯ', match: 88 },
-    ],
-    stateScheme: { name: 'Uzhavar Pathukappu', nameLocal: 'ಉಳವರ್ ಪತುಕ್ಕಪ್ಪು', ministry: 'ತಮಿಳುನಾಡು ಸರ್ಕಾರ', benefit: '₹2 ಲಕ್ಷ ವಿಮೆ', match: 92 },
-  },
-  cta: {
-    heading: 'ನಿಮ್ಮ ಪ್ರಯೋಜನಗಳು ಕಾಯುತ್ತಿವೆ.',
-    subheading: 'ಸಂಭಾಷಣೆ ಪ್ರಾರಂಭಿಸಿ — ನೋಂದಣಿ ಇಲ್ಲ, ಕಾಗದದ ಕೆಲಸ ಇಲ್ಲ. ಮಾತನಾಡಿ ಸಾಕು.',
-    startTalking: '🎙️ ಈಗಲೇ ಮಾತನಾಡಲು ಪ್ರಾರಂಭಿಸಿ',
-    voiceOnly: '👴 ಧ್ವನಿ-ಮಾತ್ರ ಮೋಡ್',
-  },
-  footer: {
-    tagline: '• ಕಲ್ಯಾಣ ನ್ಯಾವಿಗೇಟರ್',
-    privacy: 'ಗೌಪ್ಯತೆ', terms: 'ನಿಯಮಗಳು', about: 'ನಮ್ಮ ಬಗ್ಗೆ', contact: 'ಸಂಪರ್ಕಿಸಿ',
-    builtFor: '© 2026 Scheme-AI • ಭಾರತಕ್ಕಾಗಿ ನಿರ್ಮಿಸಲಾಗಿದೆ',
-  },
-  elderly: {
-    back: 'ಹಿಂದೆ',
-    greetingTitle: 'ಸ್ವಾಗತ',
-    greetingBody: 'ಮೈಕ್ರೊಫೋನ್ ಒತ್ತಿ ಮತ್ತು ನಿಮ್ಮ ಬಗ್ಗೆ ಹೇಳಿ',
-    trySaying: 'ಹೀಗೆ ಹೇಳಿ ನೋಡಿ:',
-    example: 'ಉದಾಹರಣೆ: "ನನ್ನ ಹೆಸರು ರಾಮನ್, ವಯಸ್ಸು 65, ತಮಿಳುನಾಡು, ರೈತ"',
-    listening: 'ಕೇಳುತ್ತಿದ್ದೇವೆ...',
-    pressToSpeak: 'ಮಾತನಾಡಲು ಒತ್ತಿ',
-    youSaid: 'ನೀವು ಹೇಳಿದ್ದು:',
-    findingSchemes: 'ನಿಮ್ಮ ಯೋಜನೆಗಳನ್ನು ಹುಡುಕುತ್ತಿದ್ದೇವೆ...',
-    replyLabel: 'Scheme-AI ಉತ್ತರ:',
-    playAgain: 'ಮತ್ತೆ ಕೇಳಿ',
-    centralSchemes: 'ಕೇಂದ್ರ ಸರ್ಕಾರದ ಯೋಜನೆಗಳು',
-    stateSchemes: 'ರಾಜ್ಯ ಯೋಜನೆಗಳು',
-    helpLine: '📞 ಸಹಾಯ ಬೇಕೇ? — ಇದನ್ನು ಕುಟುಂಬ ಸದಸ್ಯರಿಗೆ ಅಥವಾ ಗ್ರಾಮ ಪಂಚಾಯತ್ ಅಧಿಕಾರಿಗೆ ತೋರಿಸಿ',
-    applyNow: 'ಈಗಲೇ ಅರ್ಜಿ ಸಲ್ಲಿಸಿ',
-    errorMsg: 'ಕ್ಷಮಿಸಿ, ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
-  },
-  schemes: {
-    title: 'ಎಲ್ಲಾ ಸರ್ಕಾರಿ ಯೋಜನೆಗಳನ್ನು ವೀಕ್ಷಿಸಿ',
-    subtitle: 'ಕೇಂದ್ರ ಮತ್ತು ರಾಜ್ಯ ಯೋಜನೆಗಳು — ಹೆಸರು, ವರ್ಗ ಅಥವಾ ರಾಜ್ಯದ ಮೂಲಕ ಹುಡುಕಿ',
-    searchPlaceholder: 'ಯೋಜನೆಗಳನ್ನು ಹುಡುಕಿ ಉದಾ. PM-KISAN, ವಿದ್ಯಾರ್ಥಿವೇತನ, ವಸತಿ...',
-    searchButton: 'ಹುಡುಕಿ',
-    allStates: 'ಎಲ್ಲಾ ರಾಜ್ಯಗಳು',
-    showing: 'ತೋರಿಸುತ್ತಿದೆ', of: 'ರಲ್ಲಿ', schemesWord: 'ಯೋಜನೆಗಳು', inWord: 'ನಲ್ಲಿ', forWord: 'ಗಾಗಿ',
-    loading: 'ಯೋಜನೆಗಳು ಲೋಡ್ ಆಗುತ್ತಿವೆ...',
-    noResults: 'ಯಾವುದೇ ಯೋಜನೆಗಳು ಕಂಡುಬಂದಿಲ್ಲ. ಬೇರೆ ಫಿಲ್ಟರ್‌ಗಳನ್ನು ಪ್ರಯತ್ನಿಸಿ.',
-    clearFilters: 'ಫಿಲ್ಟರ್‌ಗಳನ್ನು ತೆರವುಗೊಳಿಸಿ',
-    benefit: 'ಪ್ರಯೋಜನ',
-    central: 'ಕೇಂದ್ರ',
-    apply: 'ಅರ್ಜಿ ಸಲ್ಲಿಸಿ →',
-    prev: '← ಹಿಂದಿನ', next: 'ಮುಂದಿನ →', page: 'ಪುಟ',
-    ctaQuestion: 'ನೀವು ಯಾವ ಯೋಜನೆಗೆ ಅರ್ಹರು ಎಂದು ಖಚಿತವಿಲ್ಲವೇ?',
-    ctaButton: '🎙️ AI ಜೊತೆ ಮಾತನಾಡಿ — ನಿಮ್ಮ ಯೋಜನೆಗಳನ್ನು ಹುಡುಕಿ',
-    categories: {
-      All: 'ಎಲ್ಲಾ', Agriculture: 'ಕೃಷಿ', Education: 'ಶಿಕ್ಷಣ', Health: 'ಆರೋಗ್ಯ',
-      Housing: 'ವಸತಿ', 'Women & Child': 'ಮಹಿಳೆ ಮತ್ತು ಮಕ್ಕಳು', Finance: 'ಹಣಕಾಸು',
-      Employment: 'ಉದ್ಯೋಗ', Disability: 'ಅಂಗವೈಕಲ್ಯ',
-    },
-  },
-}
+    // 1 ── understand ─────────────────────────────────────────
+    const u = await understand({ message, alternatives, history, profile: session.userProfile || {}, language })
 
-const gu = {
-  nav: { home: 'હોમ', talkToAI: 'AI સાથે વાત કરો', schemes: 'યોજનાઓ', scanId: 'ID સ્કેન કરો', dashboard: 'ડેશબોર્ડ', speakNow: 'હવે બોલો' },
-  modeSelect: {
-    title: 'તમે કેવી રીતે આગળ વધવા માંગો છો?',
-    subtitle: 'તમારા માટે જે સરળ હોય તે પસંદ કરો',
-    textChatTitle: 'ટેક્સ્ટ ચેટ',
-    textChatDesc: 'ટાઇપ કરો અથવા બોલો, સ્ક્રીન પર પરિણામો જુઓ',
-    voiceOnlyTitle: 'ફક્ત-અવાજ મોડ',
-    voiceOnlyDesc: 'મોટા બટનો, બોલાયેલા જવાબો — સરળ ઉપયોગ માટે બનાવેલ',
-  },
-  hero: {
-    badge: '✦ હેકાથોન 3.0 — સામાજિક અસર માટે જનરેટિવ AI',
-    titleLine1: 'એકવાર બોલો.',
-    titleLine2: 'તમારો હક છે તે બધું',
-    titleHighlight: 'મેળવો.',
-    subtitle: 'દર વર્ષે લાખો કરોડ રૂપિયાની ભારતીય કલ્યાણ યોજનાઓ દાવો કર્યા વિના રહી જાય છે — લોકો પાત્ર ન હોવાને કારણે નહીં, પરંતુ કોઈએ તેમને કહ્યું નહીં તેથી. Scheme-AI તમારી વાત સાંભળીને તેમાં છુપાયેલી યોજનાઓ શોધે છે.',
-    startTalking: 'બોલવાનું શરૂ કરો →',
-    browseSchemes: 'યોજનાઓ જુઓ',
-    tapToSpeak: 'કોઈપણ ભાષામાં ટેપ કરો અને બોલો',
-    sampleAnswerLabel: 'નમૂનાનો જવાબ',
-    samples: [
-      'તમે 4 યોજનાઓ માટે પાત્ર છો. સૌથી નજીકની યોજના તમારા પરિવારને દર મહિને ₹1,000 આપે છે અને ફક્ત રેશન કાર્ડની જરૂર છે.',
-      'તમિલનાડુના 65 વર્ષીય ખેડૂત તરીકે, તમે PM-KISAN અને ઉઝાવર પથુક્કપ્પુ થિટ્ટમ માટે પાત્ર છો.',
-      'તમારી દીકરી મૂવલુર રામામિર્થમ અમ્મૈયાર યોજના માટે પાત્ર છે — મફત સાયકલ + ₹1,000 રોકડ.',
-    ],
-  },
-  stats: [
-    { value: '50 કરોડ+', label: 'સેવાવંચિત નાગરિકો' },
-    { value: '2,000+', label: 'કેન્દ્ર અને રાજ્ય યોજનાઓ' },
-    { value: '12+', label: 'ભારતીય ભાષાઓ' },
-    { value: '28', label: 'રોડમેપ પર રાજ્યો' },
-  ],
-  features: {
-    heading: 'જેમણે ક્યારેય ઓનલાઇન ફોર્મ ભર્યું નથી તેમના માટે બનાવેલ',
-    subheading: 'મોટાભાગની કલ્યાણ ટેકનોલોજી એવા લોકો માટે બનેલી છે જેઓ પહેલેથી જ સરકારી પ્રક્રિયા જાણે છે. અમે આ બાકીના બધા માટે બનાવ્યું છે.',
-    items: [
-      { icon: '💬', title: 'ફક્ત બોલો, ફોર્મ નહીં', desc: 'પડોશીને કહો તેમ તમારું જીવન વર્ણવો. કાગળનું કામ સહાયક સંભાળે છે.' },
-      { icon: '🗣️', title: 'તમારી ભાષા, તમારા શબ્દો', desc: 'હિન્દી, તમિલ, તેલુગુ, બંગાળી અને વધુ — બોલીને પૂછો, બોલીને જવાબ મેળવો, જરૂર પડ્યે સરળ ભાષામાં.' },
-      { icon: '📄', title: 'દસ્તાવેજો તમારા માટે વાંચવામાં આવે છે', desc: 'આધાર અથવા રેશન કાર્ડ સ્કેન કરો અને વિગતો સીધી તમારી અરજીમાં ભરાય છે.' },
-      { icon: '✅', title: 'તમે ચકાસી શકો તેવા કારણો', desc: 'દરેક મેચ સાથે 0–100 સ્કોર અને સાદી ભાષામાં કારણ — કોઈ બ્લેક બોક્સ નહીં, કોઈ એજન્ટ ફી નહીં.' },
-    ],
-  },
-  howItWorks: {
-    kicker: '4-સ્તરીય પ્રોમ્પ્ટ ચેઇન',
-    heading: 'તમારા વાક્ય અને તમારા જવાબ વચ્ચે શું થાય છે',
-    steps: [
-      { title: 'પ્રોફાઇલ એક્સટ્રેક્ટર', desc: 'સ્વાભાવિક વાતચીતમાંથી AI તમારી ઉંમર, વ્યવસાય, જાતિ, આવક અને રાજ્ય સમજે છે.' },
-      { title: 'RAG સર્ચ', desc: 'તમારી પ્રોફાઇલને ક્વેરી તરીકે ઉપયોગ કરીને 2,000+ યોજનાઓ તરત જ શોધાય છે.' },
-      { title: 'પાત્રતા સ્કોરર', desc: 'દરેક યોજનાને 0–100 મેચ સ્કોર અને સાદી ભાષામાં કારણ મળે છે.' },
-      { title: 'વૉઇસ રિપ્લાય', desc: 'પરિણામો તમારી ભાષામાં અરજી લિંક્સ અને દસ્તાવેજ યાદી સાથે બોલવામાં આવે છે.' },
-    ],
-  },
-  demo: {
-    heading: 'તેને ક્રિયામાં જુઓ',
-    subheading: 'તમિલનાડુના 65 વર્ષીય ખેડૂત શું જોશે તે અહીં છે:',
-    userMsg: 'હું તમિલનાડુનો 65 વર્ષીય ખેડૂત છું',
-    aiMsg: 'તમિલનાડુના 65 વર્ષીય ખેડૂત તરીકે, તમે PM-KISAN યોજના (₹6,000/વર્ષ) અને ઉઝાવર પથુક્કપ્પુ થિટ્ટમ (₹2 લાખ અકસ્માત વીમો) માટે પાત્ર બની શકો છો. તમે પહેલા કઈ રાજ્ય યોજના માટે અરજી કરવા માંગો છો?',
-    centralHeader: 'કેન્દ્ર સરકારની યોજનાઓ',
-    stateHeader: 'તમિલનાડુ રાજ્યની યોજનાઓ',
-    schemeCards: [
-      { name: 'PM-KISAN Samman Nidhi', nameLocal: 'પીએમ-કિસાન સન્માન નિધિ', ministry: 'કૃષિ મંત્રાલય', benefit: '₹6,000/વર્ષ', match: 95 },
-      { name: 'Ayushman Bharat PM-JAY', nameLocal: 'આયુષ્માન ભારત પીએમ-જય', ministry: 'આરોગ્ય મંત્રાલય', benefit: '₹5 લાખ/વર્ષ આરોગ્ય', match: 88 },
-    ],
-    stateScheme: { name: 'Uzhavar Pathukappu', nameLocal: 'ઉઝાવર પથુક્કપ્પુ', ministry: 'તમિલનાડુ સરકાર', benefit: '₹2 લાખ વીમો', match: 92 },
-  },
-  cta: {
-    heading: 'તમારા લાભો રાહ જોઈ રહ્યા છે.',
-    subheading: 'વાતચીત શરૂ કરો — કોઈ નોંધણી નહીં, કોઈ કાગળકામ નહીં. ફક્ત બોલો.',
-    startTalking: '🎙️ હમણાં જ બોલવાનું શરૂ કરો',
-    voiceOnly: '👴 ફક્ત-અવાજ મોડ',
-  },
-  footer: {
-    tagline: '• કલ્યાણ નેવિગેટર',
-    privacy: 'ગોપનીયતા', terms: 'શરતો', about: 'અમારા વિશે', contact: 'સંપર્ક કરો',
-    builtFor: '© 2026 Scheme-AI • ભારત માટે બનાવેલ',
-  },
-  elderly: {
-    back: 'પાછળ',
-    greetingTitle: 'સ્વાગત છે',
-    greetingBody: 'માઇક્રોફોન દબાવો અને તમારા વિશે જણાવો',
-    trySaying: 'આમ કહીને જુઓ:',
-    example: 'ઉદાહરણ: "મારું નામ રમણ છે, ઉંમર 65, તમિલનાડુ, ખેડૂત"',
-    listening: 'સાંભળી રહ્યા છીએ...',
-    pressToSpeak: 'બોલવા માટે દબાવો',
-    youSaid: 'તમે કહ્યું:',
-    findingSchemes: 'તમારી યોજનાઓ શોધી રહ્યા છીએ...',
-    replyLabel: 'Scheme-AI નો જવાબ:',
-    playAgain: 'ફરીથી સાંભળો',
-    centralSchemes: 'કેન્દ્ર સરકારની યોજનાઓ',
-    stateSchemes: 'રાજ્ય યોજનાઓ',
-    helpLine: '📞 મદદ જોઈએ છે? — આ કોઈ પરિવારના સભ્ય અથવા ગ્રામ પંચાયત અધિકારીને બતાવો',
-    applyNow: 'હમણાં અરજી કરો',
-    errorMsg: 'માફ કરશો, કૃપા કરીને ફરી પ્રયાસ કરો.',
-  },
-  schemes: {
-    title: 'બધી સરકારી યોજનાઓ જુઓ',
-    subtitle: 'કેન્દ્ર અને રાજ્ય યોજનાઓ — નામ, શ્રેણી અથવા રાજ્ય દ્વારા શોધો',
-    searchPlaceholder: 'યોજનાઓ શોધો દા.ત. PM-KISAN, શિષ્યવૃત્તિ, આવાસ...',
-    searchButton: 'શોધો',
-    allStates: 'બધા રાજ્યો',
-    showing: 'બતાવી રહ્યા છીએ', of: 'માંથી', schemesWord: 'યોજનાઓ', inWord: 'માં', forWord: 'માટે',
-    loading: 'યોજનાઓ લોડ થઈ રહી છે...',
-    noResults: 'કોઈ યોજના મળી નથી. અલગ ફિલ્ટર અજમાવો.',
-    clearFilters: 'ફિલ્ટર સાફ કરો',
-    benefit: 'લાભ',
-    central: 'કેન્દ્રીય',
-    apply: 'અરજી કરો →',
-    prev: '← પાછલું', next: 'આગળ →', page: 'પાનું',
-    ctaQuestion: 'તમે કઈ યોજના માટે પાત્ર છો તેની ખાતરી નથી?',
-    ctaButton: '🎙️ AI સાથે વાત કરો — તમારી યોજનાઓ શોધો',
-    categories: {
-      All: 'બધા', Agriculture: 'કૃષિ', Education: 'શિક્ષણ', Health: 'આરોગ્ય',
-      Housing: 'આવાસ', 'Women & Child': 'મહિલા અને બાળક', Finance: 'નાણાં',
-      Employment: 'રોજગાર', Disability: 'વિકલાંગતા',
-    },
-  },
-}
+    // Voice: if unsure what was said, let the UI confirm before doing anything
+    if (mode === 'voice' && !confirmed && u.confidence < 0.6 && u.intent !== 'greeting') {
+      return res.json({
+        needsConfirmation: true, understood: u.corrected_text, confidence: u.confidence,
+        reply: '', schemes: [], sessionId: sid, userProfile: publicProfile(session.userProfile),
+      })
+    }
 
-const ml = {
-  nav: { home: 'ഹോം', talkToAI: 'AI-യുമായി സംസാരിക്കുക', schemes: 'പദ്ധതികൾ', scanId: 'ID സ്കാൻ ചെയ്യുക', dashboard: 'ഡാഷ്ബോർഡ്', speakNow: 'ഇപ്പോൾ സംസാരിക്കുക' },
-  modeSelect: {
-    title: 'നിങ്ങൾ എങ്ങനെ തുടരാൻ ആഗ്രഹിക്കുന്നു?',
-    subtitle: 'നിങ്ങൾക്ക് എളുപ്പമുള്ളത് തിരഞ്ഞെടുക്കൂ',
-    textChatTitle: 'ടെക്സ്റ്റ് ചാറ്റ്',
-    textChatDesc: 'ടൈപ്പ് ചെയ്യൂ അല്ലെങ്കിൽ സംസാരിക്കൂ, സ്ക്രീനിൽ ഫലങ്ങൾ കാണൂ',
-    voiceOnlyTitle: 'വോയ്സ്-മാത്രം മോഡ്',
-    voiceOnlyDesc: 'വലിയ ബട്ടണുകൾ, സംസാരിക്കുന്ന ഉത്തരങ്ങൾ — എളുപ്പമുള്ള ഉപയോഗത്തിനായി നിർമ്മിച്ചത്',
-  },
-  hero: {
-    badge: '✦ ഹാക്കത്തോൺ 3.0 — സാമൂഹിക പ്രഭാവത്തിനുള്ള ജനറേറ്റീവ് AI',
-    titleLine1: 'ഒരിക്കൽ സംസാരിക്കൂ.',
-    titleLine2: 'നിങ്ങൾക്ക് അർഹതയുള്ളതെല്ലാം',
-    titleHighlight: 'നേടൂ.',
-    subtitle: 'ഓരോ വർഷവും ലക്ഷക്കണക്കിന് കോടി രൂപ വിലയുള്ള ഇന്ത്യൻ ക്ഷേമ ആനുകൂല്യങ്ങൾ ക്ലെയിം ചെയ്യപ്പെടാതെ പോകുന്നു — ആളുകൾ യോഗ്യരല്ലാത്തതുകൊണ്ടല്ല, ആരും അവരോട് പറയാത്തതുകൊണ്ടാണ്. Scheme-AI നിങ്ങളുടെ കഥ കേട്ട് അതിൽ മറഞ്ഞിരിക്കുന്ന പദ്ധതികൾ കണ്ടെത്തുന്നു.',
-    startTalking: 'സംസാരിക്കാൻ തുടങ്ങൂ →',
-    browseSchemes: 'പദ്ധതികൾ കാണുക',
-    tapToSpeak: 'ഏത് ഭാഷയിലും ടാപ്പ് ചെയ്ത് സംസാരിക്കൂ',
-    sampleAnswerLabel: 'സാമ്പിൾ ഉത്തരം',
-    samples: [
-      'നിങ്ങൾ 4 പദ്ധതികൾക്ക് അർഹരാണ്. ഏറ്റവും അടുത്തുള്ള പദ്ധതി നിങ്ങളുടെ കുടുംബത്തിന് മാസം ₹1,000 നൽകുന്നു, റേഷൻ കാർഡ് മാത്രം മതി.',
-      'തമിഴ്‌നാട്ടിലെ 65 വയസ്സുള്ള കർഷകൻ എന്ന നിലയിൽ, നിങ്ങൾ PM-KISAN, ഉഴവർ പതുക്കാപ്പു തിട്ടം എന്നിവയ്ക്ക് അർഹരാണ്.',
-      'നിങ്ങളുടെ മകൾ മൂവലൂർ രാമാമിർത്തം അമ്മയാർ പദ്ധതിക്ക് അർഹയാണ് — സൗജന്യ സൈക്കിൾ + ₹1,000 പണം.',
-    ],
-  },
-  stats: [
-    { value: '50 കോടി+', label: 'സേവനം ലഭിക്കാത്ത പൗരന്മാർ' },
-    { value: '2,000+', label: 'കേന്ദ്ര & സംസ്ഥാന പദ്ധതികൾ' },
-    { value: '12+', label: 'ഇന്ത്യൻ ഭാഷകൾ' },
-    { value: '28', label: 'റോഡ്‌മാപ്പിലെ സംസ്ഥാനങ്ങൾ' },
-  ],
-  features: {
-    heading: 'ഓൺലൈനിൽ ഒരിക്കലും ഫോം പൂരിപ്പിക്കാത്ത വ്യക്തിക്ക് വേണ്ടി നിർമ്മിച്ചത്',
-    subheading: 'മിക്ക ക്ഷേമ സാങ്കേതികവിദ്യയും ബ്യൂറോക്രസി എങ്ങനെ കൈകാര്യം ചെയ്യണമെന്ന് ഇതിനകം അറിയാവുന്നവർക്കായി നിർമ്മിച്ചതാണ്. ഇത് ബാക്കിയുള്ള എല്ലാവർക്കും വേണ്ടി ഞങ്ങൾ നിർമ്മിച്ചു.',
-    items: [
-      { icon: '💬', title: 'സംസാരിച്ചാൽ മതി, ഫോം വേണ്ട', desc: 'അയൽക്കാരനോട് പറയുന്നത് പോലെ നിങ്ങളുടെ ജീവിതം വിവരിക്കൂ. പേപ്പർ ജോലി സഹായി ചെയ്യും.' },
-      { icon: '🗣️', title: 'നിങ്ങളുടെ ഭാഷ, നിങ്ങളുടെ വാക്കുകൾ', desc: 'ഹിന്ദി, തമിഴ്, തെലുങ്ക്, ബംഗാളി എന്നിവയും കൂടുതലും — സംസാരിച്ച് ചോദിക്കൂ, സംസാരിച്ച് ഉത്തരം നേടൂ, വേണമെങ്കിൽ ലളിതമാക്കി.' },
-      { icon: '📄', title: 'രേഖകൾ നിങ്ങൾക്കായി വായിക്കപ്പെടുന്നു', desc: 'ആധാർ അല്ലെങ്കിൽ റേഷൻ കാർഡ് സ്കാൻ ചെയ്യൂ, വിവരങ്ങൾ നേരിട്ട് നിങ്ങളുടെ അപേക്ഷയിലേക്ക് നിറയും.' },
-      { icon: '✅', title: 'നിങ്ങൾക്ക് പരിശോധിക്കാവുന്ന കാരണങ്ങൾ', desc: 'ഓരോ പൊരുത്തത്തിനും 0–100 സ്കോറും ലളിതമായ ഭാഷയിൽ കാരണവും — ബ്ലാക്ക് ബോക്സ് ഇല്ല, ഏജന്റ് ഫീസ് ഇല്ല.' },
-    ],
-  },
-  howItWorks: {
-    kicker: '4-തല പ്രോംപ്റ്റ് ചെയിൻ',
-    heading: 'നിങ്ങളുടെ വാക്യത്തിനും ഉത്തരത്തിനും ഇടയിൽ എന്ത് സംഭവിക്കുന്നു',
-    steps: [
-      { title: 'പ്രൊഫൈൽ എക്സ്ട്രാക്ടർ', desc: 'സ്വാഭാവിക സംഭാഷണത്തിൽ നിന്ന് AI നിങ്ങളുടെ പ്രായം, തൊഴിൽ, ജാതി, വരുമാനം, സംസ്ഥാനം എന്നിവ മനസ്സിലാക്കുന്നു.' },
-      { title: 'RAG തിരയൽ', desc: 'നിങ്ങളുടെ പ്രൊഫൈൽ ചോദ്യമായി ഉപയോഗിച്ച് 2,000+ പദ്ധതികൾ തൽക്ഷണം തിരയുന്നു.' },
-      { title: 'യോഗ്യതാ സ്കോററർ', desc: 'ഓരോ പദ്ധതിക്കും 0–100 പൊരുത്ത സ്കോറും ലളിതമായ കാരണവും ലഭിക്കുന്നു.' },
-      { title: 'വോയ്സ് റിപ്ലേ', desc: 'ഫലങ്ങൾ നിങ്ങളുടെ ഭാഷയിൽ അപേക്ഷാ ലിങ്കുകളും രേഖാ ചെക്ക്‌ലിസ്റ്റും സഹിതം പറയപ്പെടും.' },
-    ],
-  },
-  demo: {
-    heading: 'ഇത് പ്രവർത്തനത്തിൽ കാണൂ',
-    subheading: 'തമിഴ്‌നാട്ടിലെ 65 വയസ്സുള്ള കർഷകൻ എന്ത് കാണുമെന്ന് ഇതാ:',
-    userMsg: 'ഞാൻ തമിഴ്‌നാട്ടിലെ 65 വയസ്സുള്ള കർഷകനാണ്',
-    aiMsg: 'തമിഴ്‌നാട്ടിലെ 65 വയസ്സുള്ള കർഷകൻ എന്ന നിലയിൽ, നിങ്ങൾ PM-KISAN പദ്ധതി (₹6,000/വർഷം), ഉഴവർ പതുക്കാപ്പു തിട്ടം (₹2 ലക്ഷം അപകട ഇൻഷുറൻസ്) എന്നിവയ്ക്ക് അർഹരാകാം. ആദ്യം ഏത് സംസ്ഥാന പദ്ധതിക്കാണ് അപേക്ഷിക്കാൻ ആഗ്രഹിക്കുന്നത്?',
-    centralHeader: 'കേന്ദ്ര സർക്കാർ പദ്ധതികൾ',
-    stateHeader: 'തമിഴ്‌നാട് സംസ്ഥാന പദ്ധതികൾ',
-    schemeCards: [
-      { name: 'PM-KISAN Samman Nidhi', nameLocal: 'പിഎം-കിസാൻ സമ്മാൻ നിധി', ministry: 'കൃഷി മന്ത്രാലയം', benefit: '₹6,000/വർഷം', match: 95 },
-      { name: 'Ayushman Bharat PM-JAY', nameLocal: 'ആയുഷ്മാൻ ഭാരത് പിഎം-ജെ', ministry: 'ആരോഗ്യ മന്ത്രാലയം', benefit: '₹5 ലക്ഷം/വർഷം ആരോഗ്യം', match: 88 },
-    ],
-    stateScheme: { name: 'Uzhavar Pathukappu', nameLocal: 'ഉഴവർ പതുക്കാപ്പു', ministry: 'തമിഴ്‌നാട് സർക്കാർ', benefit: '₹2 ലക്ഷം ഇൻഷുറൻസ്', match: 92 },
-  },
-  cta: {
-    heading: 'നിങ്ങളുടെ ആനുകൂല്യങ്ങൾ കാത്തിരിക്കുന്നു.',
-    subheading: 'ഒരു സംഭാഷണം ആരംഭിക്കൂ — രജിസ്ട്രേഷൻ ഇല്ല, പേപ്പർ വർക്ക് ഇല്ല. സംസാരിച്ചാൽ മതി.',
-    startTalking: '🎙️ ഇപ്പോൾ തന്നെ സംസാരിക്കാൻ തുടങ്ങൂ',
-    voiceOnly: '👴 വോയ്സ്-മാത്രം മോഡ്',
-  },
-  footer: {
-    tagline: '• ക്ഷേമ നാവിഗേറ്റർ',
-    privacy: 'സ്വകാര്യത', terms: 'നിബന്ധനകൾ', about: 'ഞങ്ങളെക്കുറിച്ച്', contact: 'ബന്ധപ്പെടുക',
-    builtFor: '© 2026 Scheme-AI • ഇന്ത്യക്കായി നിർമ്മിച്ചത്',
-  },
-  elderly: {
-    back: 'തിരികെ',
-    greetingTitle: 'സ്വാഗതം',
-    greetingBody: 'മൈക്രോഫോൺ അമർത്തി നിങ്ങളെക്കുറിച്ച് പറയൂ',
-    trySaying: 'ഇങ്ങനെ പറഞ്ഞു നോക്കൂ:',
-    example: 'ഉദാഹരണം: "എന്റെ പേര് രാമൻ, പ്രായം 65, തമിഴ്‌നാട്, കർഷകൻ"',
-    listening: 'കേൾക്കുന്നു...',
-    pressToSpeak: 'സംസാരിക്കാൻ അമർത്തുക',
-    youSaid: 'നിങ്ങൾ പറഞ്ഞത്:',
-    findingSchemes: 'നിങ്ങളുടെ പദ്ധതികൾ കണ്ടെത്തുന്നു...',
-    replyLabel: 'Scheme-AI മറുപടി:',
-    playAgain: 'വീണ്ടും കേൾക്കൂ',
-    centralSchemes: 'കേന്ദ്ര സർക്കാർ പദ്ധതികൾ',
-    stateSchemes: 'സംസ്ഥാന പദ്ധതികൾ',
-    helpLine: '📞 സഹായം വേണോ? — ഇത് ഒരു കുടുംബാംഗത്തിനോ ഗ്രാമ പഞ്ചായത്ത് ഉദ്യോഗസ്ഥനോ കാണിക്കൂ',
-    applyNow: 'ഇപ്പോൾ അപേക്ഷിക്കുക',
-    errorMsg: 'ക്ഷമിക്കണം, ദയവായി വീണ്ടും ശ്രമിക്കൂ.',
-  },
-  schemes: {
-    title: 'എല്ലാ സർക്കാർ പദ്ധതികളും കാണുക',
-    subtitle: 'കേന്ദ്ര & സംസ്ഥാന പദ്ധതികൾ — പേര്, വിഭാഗം അല്ലെങ്കിൽ സംസ്ഥാനം അനുസരിച്ച് തിരയുക',
-    searchPlaceholder: 'പദ്ധതികൾ തിരയുക ഉദാ. PM-KISAN, സ്കോളർഷിപ്പ്, ഭവനം...',
-    searchButton: 'തിരയുക',
-    allStates: 'എല്ലാ സംസ്ഥാനങ്ങളും',
-    showing: 'കാണിക്കുന്നു', of: 'ൽ', schemesWord: 'പദ്ധതികൾ', inWord: 'ൽ', forWord: 'നായി',
-    loading: 'പദ്ധതികൾ ലോഡ് ചെയ്യുന്നു...',
-    noResults: 'പദ്ധതികളൊന്നും കണ്ടെത്തിയില്ല. വ്യത്യസ്ത ഫിൽട്ടറുകൾ പരീക്ഷിക്കുക.',
-    clearFilters: 'ഫിൽട്ടറുകൾ മായ്ക്കുക',
-    benefit: 'ആനുകൂല്യം',
-    central: 'കേന്ദ്ര',
-    apply: 'അപേക്ഷിക്കുക →',
-    prev: '← മുമ്പത്തെ', next: 'അടുത്തത് →', page: 'പേജ്',
-    ctaQuestion: 'ഏത് പദ്ധതിക്ക് നിങ്ങൾ അർഹനാണെന്ന് ഉറപ്പില്ലേ?',
-    ctaButton: '🎙️ AI-യുമായി സംസാരിക്കുക — നിങ്ങളുടെ പദ്ധതികൾ കണ്ടെത്തുക',
-    categories: {
-      All: 'എല്ലാം', Agriculture: 'കൃഷി', Education: 'വിദ്യാഭ്യാസം', Health: 'ആരോഗ്യം',
-      Housing: 'ഭവനം', 'Women & Child': 'സ്ത്രീകളും കുട്ടികളും', Finance: 'ധനകാര്യം',
-      Employment: 'തൊഴിൽ', Disability: 'വൈകല്യം',
-    },
-  },
-}
+    // 2 ── merge profile (never erase known facts) ────────────
+    const profile = mergeProfile(session.userProfile || {}, u.profile_updates)
+    profile._asked = { ...(session.userProfile?._asked || {}) }
+    logger.info(`Understood [${u.intent} ${u.confidence}${u._fallback ? ' fallback' : ''}] "${u.corrected_text}" → ${JSON.stringify(u.profile_updates)}`)
 
-const pa = {
-  nav: { home: 'ਹੋਮ', talkToAI: 'AI ਨਾਲ ਗੱਲ ਕਰੋ', schemes: 'ਯੋਜਨਾਵਾਂ', scanId: 'ID ਸਕੈਨ ਕਰੋ', dashboard: 'ਡੈਸ਼ਬੋਰਡ', speakNow: 'ਹੁਣੇ ਬੋਲੋ' },
-  modeSelect: {
-    title: 'ਤੁਸੀਂ ਕਿਵੇਂ ਅੱਗੇ ਵਧਣਾ ਚਾਹੋਗੇ?',
-    subtitle: 'ਜੋ ਤੁਹਾਡੇ ਲਈ ਆਸਾਨ ਹੋਵੇ ਉਹ ਚੁਣੋ',
-    textChatTitle: 'ਟੈਕਸਟ ਚੈਟ',
-    textChatDesc: 'ਟਾਈਪ ਕਰੋ ਜਾਂ ਬੋਲੋ, ਸਕ੍ਰੀਨ ਤੇ ਨਤੀਜੇ ਵੇਖੋ',
-    voiceOnlyTitle: 'ਸਿਰਫ਼-ਆਵਾਜ਼ ਮੋਡ',
-    voiceOnlyDesc: 'ਵੱਡੇ ਬਟਨ, ਬੋਲੇ ਗਏ ਜਵਾਬ — ਸੌਖੀ ਵਰਤੋਂ ਲਈ ਬਣਾਇਆ ਗਿਆ',
-  },
-  hero: {
-    badge: '✦ ਹੈਕਾਥਾਨ 3.0 — ਸਮਾਜਿਕ ਪ੍ਰਭਾਵ ਲਈ ਜਨਰੇਟਿਵ AI',
-    titleLine1: 'ਇੱਕ ਵਾਰ ਬੋਲੋ।',
-    titleLine2: 'ਉਹ ਸਭ ਕੁਝ ਪਾਓ',
-    titleHighlight: 'ਜੋ ਤੁਹਾਡਾ ਹੱਕ ਹੈ।',
-    subtitle: 'ਹਰ ਸਾਲ ਲੱਖਾਂ ਕਰੋੜਾਂ ਰੁਪਏ ਦੀਆਂ ਭਾਰਤੀ ਭਲਾਈ ਸਕੀਮਾਂ ਬਿਨਾਂ ਦਾਅਵਾ ਕੀਤੇ ਰਹਿ ਜਾਂਦੀਆਂ ਹਨ — ਇਸ ਲਈ ਨਹੀਂ ਕਿ ਲੋਕ ਯੋਗ ਨਹੀਂ ਹਨ, ਸਗੋਂ ਇਸ ਲਈ ਕਿਉਂਕਿ ਕਿਸੇ ਨੇ ਉਨ੍ਹਾਂ ਨੂੰ ਦੱਸਿਆ ਨਹੀਂ। Scheme-AI ਤੁਹਾਡੀ ਗੱਲ ਸੁਣ ਕੇ ਉਸ ਵਿੱਚ ਲੁਕੀਆਂ ਸਕੀਮਾਂ ਲੱਭਦਾ ਹੈ।',
-    startTalking: 'ਬੋਲਣਾ ਸ਼ੁਰੂ ਕਰੋ →',
-    browseSchemes: 'ਸਕੀਮਾਂ ਵੇਖੋ',
-    tapToSpeak: 'ਕਿਸੇ ਵੀ ਭਾਸ਼ਾ ਵਿੱਚ ਟੈਪ ਕਰੋ ਅਤੇ ਬੋਲੋ',
-    sampleAnswerLabel: 'ਨਮੂਨਾ ਜਵਾਬ',
-    samples: [
-      'ਤੁਸੀਂ 4 ਸਕੀਮਾਂ ਲਈ ਯੋਗ ਹੋ। ਸਭ ਤੋਂ ਨੇੜਲੀ ਸਕੀਮ ਤੁਹਾਡੇ ਪਰਿਵਾਰ ਨੂੰ ਹਰ ਮਹੀਨੇ ₹1,000 ਦਿੰਦੀ ਹੈ ਅਤੇ ਸਿਰਫ਼ ਰਾਸ਼ਨ ਕਾਰਡ ਦੀ ਲੋੜ ਹੈ।',
-      'ਤਮਿਲਨਾਡੂ ਦੇ 65 ਸਾਲਾ ਕਿਸਾਨ ਵਜੋਂ, ਤੁਸੀਂ PM-KISAN ਅਤੇ ਉਝਾਵਰ ਪਥੁੱਕੱਪੂ ਥਿੱਟਮ ਲਈ ਯੋਗ ਹੋ।',
-      'ਤੁਹਾਡੀ ਧੀ ਮੂਵਲੂਰ ਰਾਮਾਮਿਰਥਮ ਅੰਮਈਯਾਰ ਸਕੀਮ ਲਈ ਯੋਗ ਹੈ — ਮੁਫ਼ਤ ਸਾਈਕਲ + ₹1,000 ਨਕਦ।',
-    ],
-  },
-  stats: [
-    { value: '50 ਕਰੋੜ+', label: 'ਸੇਵਾ ਤੋਂ ਵਾਂਝੇ ਨਾਗਰਿਕ' },
-    { value: '2,000+', label: 'ਕੇਂਦਰੀ ਅਤੇ ਰਾਜ ਸਕੀਮਾਂ' },
-    { value: '12+', label: 'ਭਾਰਤੀ ਭਾਸ਼ਾਵਾਂ' },
-    { value: '28', label: 'ਰੋਡਮੈਪ ਉੱਤੇ ਰਾਜ' },
-  ],
-  features: {
-    heading: 'ਉਸ ਵਿਅਕਤੀ ਲਈ ਬਣਾਇਆ ਗਿਆ ਜਿਸਨੇ ਕਦੇ ਆਨਲਾਈਨ ਫਾਰਮ ਨਹੀਂ ਭਰਿਆ',
-    subheading: 'ਜ਼ਿਆਦਾਤਰ ਭਲਾਈ ਤਕਨਾਲੋਜੀ ਉਨ੍ਹਾਂ ਲੋਕਾਂ ਲਈ ਬਣੀ ਹੈ ਜੋ ਪਹਿਲਾਂ ਹੀ ਸਰਕਾਰੀ ਪ੍ਰਕਿਰਿਆ ਜਾਣਦੇ ਹਨ। ਅਸੀਂ ਇਹ ਬਾਕੀ ਸਾਰਿਆਂ ਲਈ ਬਣਾਇਆ ਹੈ।',
-    items: [
-      { icon: '💬', title: 'ਸਿਰਫ਼ ਬੋਲੋ, ਫਾਰਮ ਨਹੀਂ', desc: 'ਗੁਆਂਢੀ ਨੂੰ ਦੱਸਣ ਵਾਂਗ ਆਪਣੀ ਜ਼ਿੰਦਗੀ ਦੱਸੋ। ਕਾਗਜ਼ੀ ਕੰਮ ਸਹਾਇਕ ਸੰਭਾਲਦਾ ਹੈ।' },
-      { icon: '🗣️', title: 'ਤੁਹਾਡੀ ਭਾਸ਼ਾ, ਤੁਹਾਡੇ ਸ਼ਬਦ', desc: 'ਹਿੰਦੀ, ਤਮਿਲ, ਤੇਲਗੂ, ਬੰਗਾਲੀ ਅਤੇ ਹੋਰ — ਬੋਲ ਕੇ ਪੁੱਛੋ, ਬੋਲ ਕੇ ਜਵਾਬ ਪਾਓ, ਲੋੜ ਪੈਣ ਤੇ ਸੌਖੇ ਢੰਗ ਨਾਲ।' },
-      { icon: '📄', title: 'ਦਸਤਾਵੇਜ਼ ਤੁਹਾਡੇ ਲਈ ਪੜ੍ਹੇ ਜਾਂਦੇ ਹਨ', desc: 'ਆਧਾਰ ਜਾਂ ਰਾਸ਼ਨ ਕਾਰਡ ਸਕੈਨ ਕਰੋ ਅਤੇ ਵੇਰਵੇ ਸਿੱਧੇ ਤੁਹਾਡੀ ਅਰਜ਼ੀ ਵਿੱਚ ਭਰ ਜਾਂਦੇ ਹਨ।' },
-      { icon: '✅', title: 'ਕਾਰਨ ਜੋ ਤੁਸੀਂ ਜਾਂਚ ਸਕਦੇ ਹੋ', desc: 'ਹਰ ਮੈਚ ਨਾਲ 0–100 ਸਕੋਰ ਅਤੇ ਸਾਦੀ ਭਾਸ਼ਾ ਵਿੱਚ ਕਾਰਨ — ਕੋਈ ਬਲੈਕ ਬਾਕਸ ਨਹੀਂ, ਕੋਈ ਏਜੰਟ ਫੀਸ ਨਹੀਂ।' },
-    ],
-  },
-  howItWorks: {
-    kicker: '4-ਪਰਤੀ ਪ੍ਰੌਮਪਟ ਚੇਨ',
-    heading: 'ਤੁਹਾਡੇ ਵਾਕ ਅਤੇ ਤੁਹਾਡੇ ਜਵਾਬ ਵਿਚਕਾਰ ਕੀ ਹੁੰਦਾ ਹੈ',
-    steps: [
-      { title: 'ਪ੍ਰੋਫਾਈਲ ਐਕਸਟਰੈਕਟਰ', desc: 'ਕੁਦਰਤੀ ਗੱਲਬਾਤ ਤੋਂ AI ਤੁਹਾਡੀ ਉਮਰ, ਕਿੱਤਾ, ਜਾਤ, ਆਮਦਨ ਅਤੇ ਰਾਜ ਸਮਝਦਾ ਹੈ।' },
-      { title: 'RAG ਖੋਜ', desc: 'ਤੁਹਾਡੀ ਪ੍ਰੋਫਾਈਲ ਨੂੰ ਸਵਾਲ ਵਜੋਂ ਵਰਤ ਕੇ 2,000+ ਸਕੀਮਾਂ ਤੁਰੰਤ ਖੋਜੀਆਂ ਜਾਂਦੀਆਂ ਹਨ।' },
-      { title: 'ਯੋਗਤਾ ਸਕੋਰਰ', desc: 'ਹਰ ਸਕੀਮ ਨੂੰ 0–100 ਮੈਚ ਸਕੋਰ ਅਤੇ ਸਾਦੀ ਭਾਸ਼ਾ ਵਿੱਚ ਕਾਰਨ ਮਿਲਦਾ ਹੈ।' },
-      { title: 'ਵੌਇਸ ਰਿਪਲਾਈ', desc: 'ਨਤੀਜੇ ਤੁਹਾਡੀ ਭਾਸ਼ਾ ਵਿੱਚ ਅਰਜ਼ੀ ਲਿੰਕਾਂ ਅਤੇ ਦਸਤਾਵੇਜ਼ ਸੂਚੀ ਨਾਲ ਬੋਲੇ ਜਾਂਦੇ ਹਨ।' },
-    ],
-  },
-  demo: {
-    heading: 'ਇਸਨੂੰ ਕੰਮ ਕਰਦੇ ਵੇਖੋ',
-    subheading: 'ਤਮਿਲਨਾਡੂ ਦਾ 65 ਸਾਲਾ ਕਿਸਾਨ ਕੀ ਵੇਖੇਗਾ ਇਹ ਹੈ:',
-    userMsg: 'ਮੈਂ ਤਮਿਲਨਾਡੂ ਦਾ 65 ਸਾਲਾ ਕਿਸਾਨ ਹਾਂ',
-    aiMsg: 'ਤਮਿਲਨਾਡੂ ਦੇ 65 ਸਾਲਾ ਕਿਸਾਨ ਵਜੋਂ, ਤੁਸੀਂ PM-KISAN ਸਕੀਮ (₹6,000/ਸਾਲ) ਅਤੇ ਉਝਾਵਰ ਪਥੁੱਕੱਪੂ ਥਿੱਟਮ (₹2 ਲੱਖ ਦੁਰਘਟਨਾ ਬੀਮਾ) ਲਈ ਯੋਗ ਹੋ ਸਕਦੇ ਹੋ। ਤੁਸੀਂ ਪਹਿਲਾਂ ਕਿਹੜੀ ਰਾਜ ਸਕੀਮ ਲਈ ਅਰਜ਼ੀ ਦੇਣਾ ਚਾਹੋਗੇ?',
-    centralHeader: 'ਕੇਂਦਰ ਸਰਕਾਰ ਦੀਆਂ ਸਕੀਮਾਂ',
-    stateHeader: 'ਤਮਿਲਨਾਡੂ ਰਾਜ ਦੀਆਂ ਸਕੀਮਾਂ',
-    schemeCards: [
-      { name: 'PM-KISAN Samman Nidhi', nameLocal: 'ਪੀਐਮ-ਕਿਸਾਨ ਸਨਮਾਨ ਨਿਧੀ', ministry: 'ਖੇਤੀਬਾੜੀ ਮੰਤਰਾਲਾ', benefit: '₹6,000/ਸਾਲ', match: 95 },
-      { name: 'Ayushman Bharat PM-JAY', nameLocal: 'ਆਯੁਸ਼ਮਾਨ ਭਾਰਤ ਪੀਐਮ-ਜੇ', ministry: 'ਸਿਹਤ ਮੰਤਰਾਲਾ', benefit: '₹5 ਲੱਖ/ਸਾਲ ਸਿਹਤ', match: 88 },
-    ],
-    stateScheme: { name: 'Uzhavar Pathukappu', nameLocal: 'ਉਝਾਵਰ ਪਥੁੱਕੱਪੂ', ministry: 'ਤਮਿਲਨਾਡੂ ਸਰਕਾਰ', benefit: '₹2 ਲੱਖ ਬੀਮਾ', match: 92 },
-  },
-  cta: {
-    heading: 'ਤੁਹਾਡੇ ਲਾਭ ਉਡੀਕ ਰਹੇ ਹਨ।',
-    subheading: 'ਗੱਲਬਾਤ ਸ਼ੁਰੂ ਕਰੋ — ਕੋਈ ਰਜਿਸਟ੍ਰੇਸ਼ਨ ਨਹੀਂ, ਕੋਈ ਕਾਗਜ਼ੀ ਕੰਮ ਨਹੀਂ। ਬੱਸ ਬੋਲੋ।',
-    startTalking: '🎙️ ਹੁਣੇ ਬੋਲਣਾ ਸ਼ੁਰੂ ਕਰੋ',
-    voiceOnly: '👴 ਸਿਰਫ਼-ਆਵਾਜ਼ ਮੋਡ',
-  },
-  footer: {
-    tagline: '• ਭਲਾਈ ਨੇਵੀਗੇਟਰ',
-    privacy: 'ਪਰਦੇਦਾਰੀ', terms: 'ਸ਼ਰਤਾਂ', about: 'ਸਾਡੇ ਬਾਰੇ', contact: 'ਸੰਪਰਕ ਕਰੋ',
-    builtFor: '© 2026 Scheme-AI • ਭਾਰਤ ਲਈ ਬਣਾਇਆ ਗਿਆ',
-  },
-  elderly: {
-    back: 'ਵਾਪਸ',
-    greetingTitle: 'ਜੀ ਆਇਆਂ ਨੂੰ',
-    greetingBody: 'ਮਾਈਕ੍ਰੋਫੋਨ ਦਬਾਓ ਅਤੇ ਆਪਣੇ ਬਾਰੇ ਦੱਸੋ',
-    trySaying: 'ਇਹ ਕਹਿ ਕੇ ਵੇਖੋ:',
-    example: 'ਉਦਾਹਰਨ: "ਮੇਰਾ ਨਾਮ ਰਮਨ ਹੈ, ਉਮਰ 65, ਤਮਿਲਨਾਡੂ, ਕਿਸਾਨ"',
-    listening: 'ਸੁਣ ਰਹੇ ਹਾਂ...',
-    pressToSpeak: 'ਬੋਲਣ ਲਈ ਦਬਾਓ',
-    youSaid: 'ਤੁਸੀਂ ਕਿਹਾ:',
-    findingSchemes: 'ਤੁਹਾਡੀਆਂ ਸਕੀਮਾਂ ਲੱਭ ਰਹੇ ਹਾਂ...',
-    replyLabel: 'Scheme-AI ਦਾ ਜਵਾਬ:',
-    playAgain: 'ਦੁਬਾਰਾ ਸੁਣੋ',
-    centralSchemes: 'ਕੇਂਦਰ ਸਰਕਾਰ ਦੀਆਂ ਸਕੀਮਾਂ',
-    stateSchemes: 'ਰਾਜ ਸਕੀਮਾਂ',
-    helpLine: '📞 ਮਦਦ ਚਾਹੀਦੀ ਹੈ? — ਇਹ ਕਿਸੇ ਪਰਿਵਾਰਕ ਮੈਂਬਰ ਜਾਂ ਪਿੰਡ ਪੰਚਾਇਤ ਅਧਿਕਾਰੀ ਨੂੰ ਦਿਖਾਓ',
-    applyNow: 'ਹੁਣੇ ਅਰਜ਼ੀ ਦਿਓ',
-    errorMsg: 'ਮਾਫ਼ ਕਰਨਾ, ਕਿਰਪਾ ਕਰਕੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।',
-  },
-  schemes: {
-    title: 'ਸਾਰੀਆਂ ਸਰਕਾਰੀ ਸਕੀਮਾਂ ਵੇਖੋ',
-    subtitle: 'ਕੇਂਦਰੀ ਅਤੇ ਰਾਜ ਸਕੀਮਾਂ — ਨਾਮ, ਸ਼੍ਰੇਣੀ ਜਾਂ ਰਾਜ ਦੁਆਰਾ ਖੋਜੋ',
-    searchPlaceholder: 'ਸਕੀਮਾਂ ਖੋਜੋ ਜਿਵੇਂ PM-KISAN, ਸਕਾਲਰਸ਼ਿਪ, ਰਿਹਾਇਸ਼...',
-    searchButton: 'ਖੋਜੋ',
-    allStates: 'ਸਾਰੇ ਰਾਜ',
-    showing: 'ਦਿਖਾ ਰਿਹਾ ਹੈ', of: 'ਵਿੱਚੋਂ', schemesWord: 'ਸਕੀਮਾਂ', inWord: 'ਵਿੱਚ', forWord: 'ਲਈ',
-    loading: 'ਸਕੀਮਾਂ ਲੋਡ ਹੋ ਰਹੀਆਂ ਹਨ...',
-    noResults: 'ਕੋਈ ਸਕੀਮ ਨਹੀਂ ਮਿਲੀ। ਵੱਖਰੇ ਫਿਲਟਰ ਅਜ਼ਮਾਓ।',
-    clearFilters: 'ਫਿਲਟਰ ਸਾਫ਼ ਕਰੋ',
-    benefit: 'ਲਾਭ',
-    central: 'ਕੇਂਦਰੀ',
-    apply: 'ਅਰਜ਼ੀ ਦਿਓ →',
-    prev: '← ਪਿਛਲਾ', next: 'ਅਗਲਾ →', page: 'ਪੰਨਾ',
-    ctaQuestion: 'ਯਕੀਨੀ ਨਹੀਂ ਕਿ ਤੁਸੀਂ ਕਿਸ ਸਕੀਮ ਲਈ ਯੋਗ ਹੋ?',
-    ctaButton: '🎙️ AI ਨਾਲ ਗੱਲ ਕਰੋ — ਆਪਣੀਆਂ ਸਕੀਮਾਂ ਲੱਭੋ',
-    categories: {
-      All: 'ਸਾਰੇ', Agriculture: 'ਖੇਤੀਬਾੜੀ', Education: 'ਸਿੱਖਿਆ', Health: 'ਸਿਹਤ',
-      Housing: 'ਰਿਹਾਇਸ਼', 'Women & Child': 'ਔਰਤਾਂ ਅਤੇ ਬੱਚੇ', Finance: 'ਵਿੱਤ',
-      Employment: 'ਰੁਜ਼ਗਾਰ', Disability: 'ਅਪੰਗਤਾ',
-    },
-  },
-}
+    // 3 ── decide what to do ─────────────────────────────────
+    let situation = 'schemes'
+    let cards = []
+    let nextField = null
 
-const ur = {
-  nav: { home: 'ہوم', talkToAI: 'AI سے بات کریں', schemes: 'اسکیمیں', scanId: 'ID اسکین کریں', dashboard: 'ڈیش بورڈ', speakNow: 'ابھی بولیں' },
-  modeSelect: {
-    title: 'آپ کیسے آگے بڑھنا چاہیں گے؟',
-    subtitle: 'جو آپ کے لیے آسان ہو اسے منتخب کریں',
-    textChatTitle: 'ٹیکسٹ چیٹ',
-    textChatDesc: 'ٹائپ کریں یا بولیں، اسکرین پر نتائج دیکھیں',
-    voiceOnlyTitle: 'صرف آواز موڈ',
-    voiceOnlyDesc: 'بڑے بٹن، بولے گئے جوابات — آسان استعمال کے لیے بنایا گیا',
-  },
-  hero: {
-    badge: '✦ ہیکاتھون 3.0 — سماجی اثر کے لیے جنریٹو AI',
-    titleLine1: 'ایک بار بولیں۔',
-    titleLine2: 'وہ سب کچھ حاصل کریں',
-    titleHighlight: 'جس کے آپ حقدار ہیں۔',
-    subtitle: 'ہر سال لاکھوں کروڑ روپے کی ہندوستانی فلاحی اسکیمیں دعویٰ کیے بغیر رہ جاتی ہیں — اس لیے نہیں کہ لوگ اہل نہیں ہیں، بلکہ اس لیے کہ کسی نے انہیں بتایا ہی نہیں۔ Scheme-AI آپ کی بات سن کر اس میں چھپی اسکیمیں تلاش کرتا ہے۔',
-    startTalking: 'بولنا شروع کریں →',
-    browseSchemes: 'اسکیمیں دیکھیں',
-    tapToSpeak: 'کسی بھی زبان میں ٹیپ کریں اور بولیں',
-    sampleAnswerLabel: 'نمونہ جواب',
-    samples: [
-      'آپ 4 اسکیموں کے اہل ہیں۔ سب سے قریبی اسکیم آپ کے خاندان کو ہر ماہ ₹1,000 دیتی ہے اور صرف راشن کارڈ درکار ہے۔',
-      'تمل ناڈو کے 65 سالہ کسان کے طور پر، آپ PM-KISAN اور اوزاور پتھوکاپو تھٹم کے اہل ہیں۔',
-      'آپ کی بیٹی موولور راماامیرتھم امیار اسکیم کی اہل ہے — مفت سائیکل + ₹1,000 نقد۔',
-    ],
-  },
-  stats: [
-    { value: '50 کروڑ+', label: 'خدمات سے محروم شہری' },
-    { value: '2,000+', label: 'مرکزی اور ریاستی اسکیمیں' },
-    { value: '12+', label: 'ہندوستانی زبانیں' },
-    { value: '28', label: 'روڈ میپ پر ریاستیں' },
-  ],
-  features: {
-    heading: 'اُس شخص کے لیے بنایا گیا جس نے کبھی آن لائن فارم نہیں بھرا',
-    subheading: 'زیادہ تر فلاحی ٹیکنالوجی ان لوگوں کے لیے بنائی گئی ہے جو پہلے سے سرکاری کارروائی جانتے ہیں۔ ہم نے یہ باقی سب کے لیے بنایا ہے۔',
-    items: [
-      { icon: '💬', title: 'صرف بولیں، فارم نہیں', desc: 'اپنی زندگی کے بارے میں ویسے ہی بتائیں جیسے کسی پڑوسی کو بتاتے ہیں۔ کاغذی کارروائی معاون سنبھالتا ہے۔' },
-      { icon: '🗣️', title: 'آپ کی زبان، آپ کے الفاظ', desc: 'ہندی، تمل، تیلگو، بنگالی اور مزید — بول کر پوچھیں، بول کر جواب پائیں، ضرورت پڑنے پر آسان زبان میں۔' },
-      { icon: '📄', title: 'دستاویزات آپ کے لیے پڑھی جاتی ہیں', desc: 'آدھار یا راشن کارڈ اسکین کریں اور تفصیلات براہ راست آپ کی درخواست میں آ جاتی ہیں۔' },
-      { icon: '✅', title: 'وہ وجوہات جنہیں آپ جانچ سکتے ہیں', desc: 'ہر میچ کے ساتھ 0–100 اسکور اور سادہ زبان میں وجہ — کوئی بلیک باکس نہیں، کوئی ایجنٹ فیس نہیں۔' },
-    ],
-  },
-  howItWorks: {
-    kicker: '4-تہہ پرامپٹ چین',
-    heading: 'آپ کے جملے اور آپ کے جواب کے درمیان کیا ہوتا ہے',
-    steps: [
-      { title: 'پروفائل ایکسٹریکٹر', desc: 'فطری گفتگو سے AI آپ کی عمر، پیشہ، ذات، آمدنی اور ریاست کو سمجھتا ہے۔' },
-      { title: 'RAG سرچ', desc: 'آپ کی پروفائل کو سوال کے طور پر استعمال کرتے ہوئے 2,000+ اسکیمیں فوری تلاش کی جاتی ہیں۔' },
-      { title: 'اہلیت اسکورر', desc: 'ہر اسکیم کو 0–100 میچ اسکور اور سادہ زبان میں وجہ ملتی ہے۔' },
-      { title: 'وائس ریپلائی', desc: 'نتائج آپ کی زبان میں درخواست لنکس اور دستاویزات کی فہرست کے ساتھ بولے جاتے ہیں۔' },
-    ],
-  },
-  demo: {
-    heading: 'اسے عمل میں دیکھیں',
-    subheading: 'تمل ناڈو کے 65 سالہ کسان کو کیا نظر آئے گا یہ ہے:',
-    userMsg: 'میں تمل ناڈو کا 65 سالہ کسان ہوں',
-    aiMsg: 'تمل ناڈو کے 65 سالہ کسان کے طور پر، آپ PM-KISAN اسکیم (₹6,000/سال) اور اوزاور پتھوکاپو تھٹم (₹2 لاکھ حادثاتی بیمہ) کے اہل ہو سکتے ہیں۔ آپ پہلے کس ریاستی اسکیم کے لیے درخواست دینا چاہیں گے؟',
-    centralHeader: 'مرکزی حکومت کی اسکیمیں',
-    stateHeader: 'تمل ناڈو ریاستی اسکیمیں',
-    schemeCards: [
-      { name: 'PM-KISAN Samman Nidhi', nameLocal: 'پی ایم-کسان سمان ندھی', ministry: 'وزارت زراعت', benefit: '₹6,000/سال', match: 95 },
-      { name: 'Ayushman Bharat PM-JAY', nameLocal: 'آیوشمان بھارت پی ایم-جے', ministry: 'وزارت صحت', benefit: '₹5 لاکھ/سال صحت', match: 88 },
-    ],
-    stateScheme: { name: 'Uzhavar Pathukappu', nameLocal: 'اوزاور پتھوکاپو', ministry: 'حکومت تمل ناڈو', benefit: '₹2 لاکھ بیمہ', match: 92 },
-  },
-  cta: {
-    heading: 'آپ کے فوائد آپ کا انتظار کر رہے ہیں۔',
-    subheading: 'بات چیت شروع کریں — کوئی رجسٹریشن نہیں، کوئی کاغذی کارروائی نہیں۔ بس بولیں۔',
-    startTalking: '🎙️ ابھی بولنا شروع کریں',
-    voiceOnly: '👴 صرف آواز موڈ',
-  },
-  footer: {
-    tagline: '• فلاحی نیویگیٹر',
-    privacy: 'رازداری', terms: 'شرائط', about: 'ہمارے بارے میں', contact: 'رابطہ کریں',
-    builtFor: '© 2026 Scheme-AI • ہندوستان کے لیے بنایا گیا',
-  },
-  elderly: {
-    back: 'واپس',
-    greetingTitle: 'خوش آمدید',
-    greetingBody: 'مائیکروفون دبائیں اور اپنے بارے میں بتائیں',
-    trySaying: 'یہ کہہ کر دیکھیں:',
-    example: 'مثال: "میرا نام رمن ہے، عمر 65، تمل ناڈو، کسان"',
-    listening: 'سن رہے ہیں...',
-    pressToSpeak: 'بولنے کے لیے دبائیں',
-    youSaid: 'آپ نے کہا:',
-    findingSchemes: 'آپ کی اسکیمیں تلاش کر رہے ہیں...',
-    replyLabel: 'Scheme-AI کا جواب:',
-    playAgain: 'دوبارہ سنیں',
-    centralSchemes: 'مرکزی حکومت کی اسکیمیں',
-    stateSchemes: 'ریاستی اسکیمیں',
-    helpLine: '📞 مدد چاہیے؟ — یہ کسی خاندان کے فرد یا گاؤں پنچایت افسر کو دکھائیں',
-    applyNow: 'ابھی درخواست دیں',
-    errorMsg: 'معذرت، براہ کرم دوبارہ کوشش کریں۔',
-  },
-  schemes: {
-    title: 'تمام سرکاری اسکیمیں دیکھیں',
-    subtitle: 'مرکزی اور ریاستی اسکیمیں — نام، قسم یا ریاست کے ذریعے تلاش کریں',
-    searchPlaceholder: 'اسکیمیں تلاش کریں مثلاً PM-KISAN، وظیفہ، رہائش...',
-    searchButton: 'تلاش کریں',
-    allStates: 'تمام ریاستیں',
-    showing: 'دکھا رہا ہے', of: 'میں سے', schemesWord: 'اسکیمیں', inWord: 'میں', forWord: 'کے لیے',
-    loading: 'اسکیمیں لوڈ ہو رہی ہیں...',
-    noResults: 'کوئی اسکیم نہیں ملی۔ مختلف فلٹرز آزمائیں۔',
-    clearFilters: 'فلٹرز صاف کریں',
-    benefit: 'فائدہ',
-    central: 'مرکزی',
-    apply: 'درخواست دیں →',
-    prev: '← پچھلا', next: 'اگلا →', page: 'صفحہ',
-    ctaQuestion: 'یقین نہیں کہ آپ کس اسکیم کے اہل ہیں؟',
-    ctaButton: '🎙️ AI سے بات کریں — اپنی اسکیمیں تلاش کریں',
-    categories: {
-      All: 'تمام', Agriculture: 'زراعت', Education: 'تعلیم', Health: 'صحت',
-      Housing: 'رہائش', 'Women & Child': 'خواتین اور بچے', Finance: 'مالیات',
-      Employment: 'ملازمت', Disability: 'معذوری',
-    },
-  },
-}
+    if (u.intent === 'greeting') situation = 'greeting'
+    else if (u.intent === 'off_topic') situation = 'off_topic'
+    else if (u.intent === 'unclear') situation = 'unclear'
+    else {
+      // asking about a specific scheme -> answer from stored data
+      if (['scheme_detail', 'how_to_apply', 'documents_needed'].includes(u.intent) && u.referenced_scheme) {
+        const found = await findSchemeByName(u.referenced_scheme, profile.state)
+        if (found) {
+          cards = matchSchemesByProfile([found], profile, '', 1, { hardFilter: false }).map(toCard)
+          situation = 'detail'
+        }
+      }
+      if (!cards.length) {
+        if (!hasSignal(profile)) {
+          situation = 'ask'
+          nextField = pickNextField(profile) || 'occupation'
+        } else {
+          const candidates = await searchSchemes({ query: u.english_text, profile })
+          const scored = matchSchemesByProfile(candidates, profile, u.english_text, 60, { minScore: 50 })
+          const central = scored.filter((s) => s.state === 'Central').slice(0, 3)
+          const state = scored.filter((s) => s.state !== 'Central').slice(0, 2)
+          let picked = dedupe([...central, ...state]).sort((a, b) => b.rawScore - a.rawScore)
+          if (mode === 'voice') picked = picked.slice(0, 3)
+          cards = picked.map(toCard)
+          situation = cards.length ? 'schemes' : 'no_match'
+          nextField = pickNextField(profile)
+        }
+      }
+    }
+    if (nextField) profile._asked[nextField] = (profile._asked[nextField] || 0) + 1
 
-const or_ = {
-  nav: { home: 'ହୋମ', talkToAI: 'AI ସହିତ କଥା ହୁଅନ୍ତୁ', schemes: 'ଯୋଜନା', scanId: 'ID ସ୍କାନ୍ କରନ୍ତୁ', dashboard: 'ଡ୍ୟାସବୋର୍ଡ', speakNow: 'ବର୍ତ୍ତମାନ କୁହନ୍ତୁ' },
-  modeSelect: {
-    title: 'ଆପଣ କିପରି ଆଗକୁ ବଢ଼ିବାକୁ ଚାହାଁନ୍ତି?',
-    subtitle: 'ଆପଣଙ୍କ ପାଇଁ ଯାହା ସହଜ ତାହା ବାଛନ୍ତୁ',
-    textChatTitle: 'ଟେକ୍ସଟ୍ ଚାଟ୍',
-    textChatDesc: 'ଟାଇପ୍ କରନ୍ତୁ କିମ୍ବା କୁହନ୍ତୁ, ସ୍କ୍ରିନରେ ଫଳାଫଳ ଦେଖନ୍ତୁ',
-    voiceOnlyTitle: 'କେବଳ-ସ୍ୱର ମୋଡ୍',
-    voiceOnlyDesc: 'ବଡ଼ ବଟନ୍, କୁହାଯାଇଥିବା ଉତ୍ତର — ସହଜ ବ୍ୟବହାର ପାଇଁ ତିଆରି',
-  },
-  hero: {
-    badge: '✦ ହ୍ୟାକାଥନ 3.0 — ସାମାଜିକ ପ୍ରଭାବ ପାଇଁ ଜେନେରେଟିଭ AI',
-    titleLine1: 'ଥରେ କୁହନ୍ତୁ।',
-    titleLine2: 'ଆପଣଙ୍କର ପାଉଣା ସବୁକିଛି',
-    titleHighlight: 'ପାଆନ୍ତୁ।',
-    subtitle: 'ପ୍ରତିବର୍ଷ ଲକ୍ଷ କୋଟି ଟଙ୍କାର ଭାରତୀୟ କଲ୍ୟାଣ ସୁବିଧା ଦାବି ନହୋଇ ରହିଯାଏ — ଲୋକମାନେ ଯୋଗ୍ୟ ନଥିବାରୁ ନୁହେଁ, ବରଂ କେହି ସେମାନଙ୍କୁ କହିନଥିବାରୁ। Scheme-AI ଆପଣଙ୍କ କାହାଣୀ ଶୁଣି ତାହାରେ ଲୁକ୍କାୟିତ ଯୋଜନାଗୁଡ଼ିକ ଖୋଜେ।',
-    startTalking: 'କୁହିବା ଆରମ୍ଭ କରନ୍ତୁ →',
-    browseSchemes: 'ଯୋଜନାଗୁଡ଼ିକ ଦେଖନ୍ତୁ',
-    tapToSpeak: 'ଯେକୌଣସି ଭାଷାରେ ଟ୍ୟାପ୍ କରି କୁହନ୍ତୁ',
-    sampleAnswerLabel: 'ନମୁନା ଉତ୍ତର',
-    samples: [
-      'ଆପଣ 4ଟି ଯୋଜନା ପାଇଁ ଯୋଗ୍ୟ। ନିକଟତମ ଯୋଜନା ଆପଣଙ୍କ ପରିବାରକୁ ପ୍ରତିମାସ ₹1,000 ଦିଏ ଏବଂ କେବଳ ରାସନ କାର୍ଡ ଆବଶ୍ୟକ।',
-      'ତାମିଲନାଡୁର 65 ବର୍ଷ ବୟସ୍କ କୃଷକ ଭାବରେ, ଆପଣ PM-KISAN ଏବଂ ଉଝାଭର ପାଥୁକ୍କାପ୍ପୁ ତିଟ୍ଟମ ପାଇଁ ଯୋଗ୍ୟ।',
-      'ଆପଣଙ୍କ ଝିଅ ମୂଭଲୁର ରାମାମିର୍ଥମ ଅମ୍ମାଇୟାର ଯୋଜନା ପାଇଁ ଯୋଗ୍ୟ — ମାଗଣା ସାଇକେଲ + ₹1,000 ନଗଦ।',
-    ],
-  },
-  stats: [
-    { value: '50 କୋଟି+', label: 'ସେବାରୁ ବଞ୍ଚିତ ନାଗରିକ' },
-    { value: '2,000+', label: 'କେନ୍ଦ୍ର ଓ ରାଜ୍ୟ ଯୋଜନା' },
-    { value: '12+', label: 'ଭାରତୀୟ ଭାଷା' },
-    { value: '28', label: 'ରୋଡମ୍ୟାପରେ ଥିବା ରାଜ୍ୟ' },
-  ],
-  features: {
-    heading: 'ଯିଏ କେବେ ଅନଲାଇନ ଫର୍ମ ପୂରଣ କରିନାହାନ୍ତି ତାଙ୍କ ପାଇଁ ତିଆରି',
-    subheading: 'ଅଧିକାଂଶ କଲ୍ୟାଣ ପ୍ରଯୁକ୍ତି ସେହି ଲୋକଙ୍କ ପାଇଁ ତିଆରି ଯେଉଁମାନେ ପୂର୍ବରୁ ସରକାରୀ ପ୍ରକ୍ରିୟା ଜାଣନ୍ତି। ଆମେ ଏହାକୁ ବାକି ସମସ୍ତଙ୍କ ପାଇଁ ତିଆରି କରିଛୁ।',
-    items: [
-      { icon: '💬', title: 'କେବଳ କୁହନ୍ତୁ, ଫର୍ମ ନୁହେଁ', desc: 'ଏକ ପଡ଼ୋଶୀକୁ କହିବା ପରି ନିଜ ଜୀବନ ବର୍ଣ୍ଣନା କରନ୍ତୁ। କାଗଜପତ୍ର କାମ ସହାୟକ କରେ।' },
-      { icon: '🗣️', title: 'ଆପଣଙ୍କ ଭାଷା, ଆପଣଙ୍କ ଶବ୍ଦ', desc: 'ହିନ୍ଦୀ, ତାମିଲ, ତେଲୁଗୁ, ବଙ୍ଗଳା ଏବଂ ଅଧିକ — କହି ପଚାରନ୍ତୁ, କହି ଉତ୍ତର ପାଆନ୍ତୁ, ଆବଶ୍ୟକ ହେଲେ ସରଳ ଭାଷାରେ।' },
-      { icon: '📄', title: 'ଦଲିଲ ଆପଣଙ୍କ ପାଇଁ ପଢ଼ାଯାଏ', desc: 'ଆଧାର କିମ୍ବା ରାସନ କାର୍ଡ ସ୍କାନ କରନ୍ତୁ ଏବଂ ବିବରଣୀ ସିଧାସଳଖ ଆପଣଙ୍କ ଆବେଦନରେ ଭରିଯାଏ।' },
-      { icon: '✅', title: 'ଆପଣ ଯାଞ୍ଚ କରିପାରିବେ ଏପରି କାରଣ', desc: 'ପ୍ରତ୍ୟେକ ମେଳ ପାଇଁ 0–100 ସ୍କୋର ଏବଂ ସରଳ ଭାଷାରେ କାରଣ — କୌଣସି ବ୍ଲାକ୍ ବକ୍ସ ନାହିଁ, କୌଣସି ଏଜେଣ୍ଟ ଫି ନାହିଁ।' },
-    ],
-  },
-  howItWorks: {
-    kicker: '4-ସ୍ତର ପ୍ରମ୍ପ୍ଟ ଚେନ',
-    heading: 'ଆପଣଙ୍କ ବାକ୍ୟ ଏବଂ ଆପଣଙ୍କ ଉତ୍ତର ମଧ୍ୟରେ କଣ ଘଟେ',
-    steps: [
-      { title: 'ପ୍ରୋଫାଇଲ ଏକ୍ସଟ୍ରାକ୍ଟର', desc: 'ସ୍ୱାଭାବିକ ବାର୍ତ୍ତାଳାପରୁ AI ଆପଣଙ୍କ ବୟସ, ବୃତ୍ତି, ଜାତି, ଆୟ ଓ ରାଜ୍ୟ ବୁଝେ।' },
-      { title: 'RAG ସନ୍ଧାନ', desc: 'ଆପଣଙ୍କ ପ୍ରୋଫାଇଲକୁ ପ୍ରଶ୍ନ ଭାବରେ ବ୍ୟବହାର କରି 2,000+ ଯୋଜନା ତୁରନ୍ତ ଖୋଜାଯାଏ।' },
-      { title: 'ଯୋଗ୍ୟତା ସ୍କୋରର', desc: 'ପ୍ରତ୍ୟେକ ଯୋଜନାକୁ 0–100 ମେଳ ସ୍କୋର ଏବଂ ସରଳ ଭାଷାରେ କାରଣ ମିଳେ।' },
-      { title: 'ଭଏସ୍ ରିପ୍ଲାଏ', desc: 'ଫଳାଫଳ ଆପଣଙ୍କ ଭାଷାରେ ଆବେଦନ ଲିଙ୍କ ଓ ଦଲିଲ ତାଲିକା ସହିତ କୁହାଯାଏ।' },
-    ],
-  },
-  demo: {
-    heading: 'ଏହାକୁ କାର୍ଯ୍ୟରେ ଦେଖନ୍ତୁ',
-    subheading: 'ତାମିଲନାଡୁର 65 ବର୍ଷ ବୟସ୍କ କୃଷକ କଣ ଦେଖିବେ ତାହା ଏଠାରେ:',
-    userMsg: 'ମୁଁ ତାମିଲନାଡୁର 65 ବର୍ଷ ବୟସ୍କ କୃଷକ',
-    aiMsg: 'ତାମିଲନାଡୁର 65 ବର୍ଷ ବୟସ୍କ କୃଷକ ଭାବରେ, ଆପଣ PM-KISAN ଯୋଜନା (₹6,000/ବର୍ଷ) ଏବଂ ଉଝାଭର ପାଥୁକ୍କାପ୍ପୁ ତିଟ୍ଟମ (₹2 ଲକ୍ଷ ଦୁର୍ଘଟଣା ବୀମା) ପାଇଁ ଯୋଗ୍ୟ ହୋଇପାରନ୍ତି। ଆପଣ ପ୍ରଥମେ କେଉଁ ରାଜ୍ୟ ଯୋଜନା ପାଇଁ ଆବେଦନ କରିବାକୁ ଚାହାଁନ୍ତି?',
-    centralHeader: 'କେନ୍ଦ୍ର ସରକାରଙ୍କ ଯୋଜନା',
-    stateHeader: 'ତାମିଲନାଡୁ ରାଜ୍ୟ ଯୋଜନା',
-    schemeCards: [
-      { name: 'PM-KISAN Samman Nidhi', nameLocal: 'ପିଏମ୍-କିଷାନ୍ ସମ୍ମାନ ନିଧି', ministry: 'କୃଷି ମନ୍ତ୍ରାଳୟ', benefit: '₹6,000/ବର୍ଷ', match: 95 },
-      { name: 'Ayushman Bharat PM-JAY', nameLocal: 'ଆୟୁଷ୍ମାନ ଭାରତ ପିଏମ୍-ଜେ', ministry: 'ସ୍ୱାସ୍ଥ୍ୟ ମନ୍ତ୍ରାଳୟ', benefit: '₹5 ଲକ୍ଷ/ବର୍ଷ ସ୍ୱାସ୍ଥ୍ୟ', match: 88 },
-    ],
-    stateScheme: { name: 'Uzhavar Pathukappu', nameLocal: 'ଉଝାଭର ପାଥୁକ୍କାପ୍ପୁ', ministry: 'ତାମିଲନାଡୁ ସରକାର', benefit: '₹2 ଲକ୍ଷ ବୀମା', match: 92 },
-  },
-  cta: {
-    heading: 'ଆପଣଙ୍କ ସୁବିଧା ଅପେକ୍ଷାରେ ଅଛି।',
-    subheading: 'ଏକ ବାର୍ତ୍ତାଳାପ ଆରମ୍ଭ କରନ୍ତୁ — କୌଣସି ପଞ୍ଜୀକରଣ ନାହିଁ, କୌଣସି କାଗଜପତ୍ର ନାହିଁ। କେବଳ କୁହନ୍ତୁ।',
-    startTalking: '🎙️ ବର୍ତ୍ତମାନ କୁହିବା ଆରମ୍ଭ କରନ୍ତୁ',
-    voiceOnly: '👴 କେବଳ-ସ୍ୱର ମୋଡ୍',
-  },
-  footer: {
-    tagline: '• କଲ୍ୟାଣ ନାଭିଗେଟର',
-    privacy: 'ଗୋପନୀୟତା', terms: 'ସର୍ତ୍ତାବଳୀ', about: 'ଆମ ବିଷୟରେ', contact: 'ଯୋଗାଯୋଗ',
-    builtFor: '© 2026 Scheme-AI • ଭାରତ ପାଇଁ ତିଆରି',
-  },
-  elderly: {
-    back: 'ପଛକୁ',
-    greetingTitle: 'ସ୍ୱାଗତ',
-    greetingBody: 'ମାଇକ୍ରୋଫୋନ୍ ଦବାନ୍ତୁ ଏବଂ ନିଜ ବିଷୟରେ କୁହନ୍ତୁ',
-    trySaying: 'ଏହିପରି କହି ଦେଖନ୍ତୁ:',
-    example: 'ଉଦାହରଣ: "ମୋର ନାମ ରମନ, ବୟସ 65, ତାମିଲନାଡୁ, କୃଷକ"',
-    listening: 'ଶୁଣୁଛୁ...',
-    pressToSpeak: 'କହିବାକୁ ଦବାନ୍ତୁ',
-    youSaid: 'ଆପଣ କହିଲେ:',
-    findingSchemes: 'ଆପଣଙ୍କ ଯୋଜନା ଖୋଜୁଛୁ...',
-    replyLabel: 'Scheme-AI ଉତ୍ତର:',
-    playAgain: 'ପୁଣି ଶୁଣନ୍ତୁ',
-    centralSchemes: 'କେନ୍ଦ୍ର ସରକାରଙ୍କ ଯୋଜନା',
-    stateSchemes: 'ରାଜ୍ୟ ଯୋଜନା',
-    helpLine: '📞 ସାହାଯ୍ୟ ଦରକାର? — ଏହାକୁ ଏକ ପରିବାର ସଦସ୍ୟ କିମ୍ବା ଗ୍ରାମ ପଞ୍ଚାୟତ ଅଧିକାରୀଙ୍କୁ ଦେଖାନ୍ତୁ',
-    applyNow: 'ବର୍ତ୍ତମାନ ଆବେଦନ କରନ୍ତୁ',
-    errorMsg: 'କ୍ଷମା କରନ୍ତୁ, ଦୟାକରି ପୁଣି ଚେଷ୍ଟା କରନ୍ତୁ.',
-  },
-  schemes: {
-    title: 'ସମସ୍ତ ସରକାରୀ ଯୋଜନା ଦେଖନ୍ତୁ',
-    subtitle: 'କେନ୍ଦ୍ର ଓ ରାଜ୍ୟ ଯୋଜନା — ନାମ, ବର୍ଗ କିମ୍ବା ରାଜ୍ୟ ଦ୍ୱାରା ଖୋଜନ୍ତୁ',
-    searchPlaceholder: 'ଯୋଜନା ଖୋଜନ୍ତୁ ଯଥା PM-KISAN, ଛାତ୍ରବୃତ୍ତି, ଗୃହନିର୍ମାଣ...',
-    searchButton: 'ଖୋଜନ୍ତୁ',
-    allStates: 'ସମସ୍ତ ରାଜ୍ୟ',
-    showing: 'ଦେଖାଉଛି', of: 'ମଧ୍ୟରୁ', schemesWord: 'ଯୋଜନା', inWord: 'ରେ', forWord: 'ପାଇଁ',
-    loading: 'ଯୋଜନା ଲୋଡ୍ ହେଉଛି...',
-    noResults: 'କୌଣସି ଯୋଜନା ମିଳିଲା ନାହିଁ। ଭିନ୍ନ ଫିଲ୍ଟର ଚେଷ୍ଟା କରନ୍ତୁ।',
-    clearFilters: 'ଫିଲ୍ଟର ସଫା କରନ୍ତୁ',
-    benefit: 'ଲାଭ',
-    central: 'କେନ୍ଦ୍ର',
-    apply: 'ଆବେଦନ କରନ୍ତୁ →',
-    prev: '← ପୂର୍ବବର୍ତ୍ତୀ', next: 'ପରବର୍ତ୍ତୀ →', page: 'ପୃଷ୍ଠା',
-    ctaQuestion: 'ଆପଣ କେଉଁ ଯୋଜନା ପାଇଁ ଯୋଗ୍ୟ ନିଶ୍ଚିତ ନାହାଁନ୍ତି?',
-    ctaButton: '🎙️ AI ସହିତ କଥା ହୁଅନ୍ତୁ — ଆପଣଙ୍କ ଯୋଜନା ଖୋଜନ୍ତୁ',
-    categories: {
-      All: 'ସବୁ', Agriculture: 'କୃଷି', Education: 'ଶିକ୍ଷା', Health: 'ସ୍ୱାସ୍ଥ୍ୟ',
-      Housing: 'ଗୃହନିର୍ମାଣ', 'Women & Child': 'ମହିଳା ଓ ଶିଶୁ', Finance: 'ଅର୍ଥ',
-      Employment: 'ନିଯୁକ୍ତି', Disability: 'ଅକ୍ଷମତା',
-    },
-  },
-}
+    // 4 ── translate cards (+reason) in ONE call ─────────────
+    cards = await localizeSchemes(cards, language)
 
-export const translations = {
-  en, hi, ta, te, bn, mr, kn, gu, ml, pa, ur, or: or_,
-}
+    // 5 ── grounded reply ────────────────────────────────────
+    let reply = ''
+    try {
+      reply = await generateGroundedReply({
+        message, understood: u.corrected_text, confidence: u.confidence, history, profile: publicProfile(profile),
+        schemes: cards, language, mode, situation, nextField, hint: u.clarifying_question || '',
+      })
+    } catch (err) {
+      logger.warn(`Reply generation failed: ${err.message}`)
+    }
+    if (!reply) reply = u.clarifying_question || fallbackReply(language, cards.length)
+
+    // 6 ── persist ───────────────────────────────────────────
+    session.userProfile = profile
+    session.messages.push({ role: 'user', content: message })
+    session.messages.push({ role: 'ai', content: reply, schemes: cards })
+    session.language = language
+    session.updatedAt = new Date()
+    await session.save()
+
+    res.json({
+      reply,
+      speech: mode === 'voice' ? cleanForSpeech(reply) : undefined,
+      schemes: cards,
+      sessionId: sid,
+      userProfile: publicProfile(profile),
+      understood: u.corrected_text,
+      confidence: u.confidence,
+      intent: u.intent,
+      needsConfirmation: false,
+    })
+  } catch (err) {
+    logger.error(`Chat error: ${err.stack || err.message}`)
+    try {
+      const all = await Scheme.find({ isActive: true, state: 'Central' }).limit(200).lean()
+      const profile = extractProfileFromText(message)
+      const scored = matchSchemesByProfile(all, profile, message, 3).map(toCard)
+      return res.json({ reply: fallbackReply(language, scored.length), schemes: scored, sessionId: sid, userProfile: publicProfile(profile) })
+    } catch {
+      return res.status(500).json({ error: 'Service unavailable', reply: 'Please try again.', schemes: [], sessionId: sid })
+    }
+  }
+})
+
+router.get('/history/:sessionId', async (req, res) => {
+  try {
+    const session = await Session.findOne({ sessionId: req.params.sessionId }).lean()
+    if (!session) return res.status(404).json({ error: 'Session not found' })
+    res.json({ messages: session.messages, userProfile: publicProfile(session.userProfile) })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+router.delete('/session/:sessionId', async (req, res) => {
+  await Session.deleteOne({ sessionId: req.params.sessionId })
+  res.json({ success: true })
+})
+
+export default router

@@ -24,6 +24,7 @@ const FALLBACK_REPLIES = {
 const fallbackReply = (lang, n) => (FALLBACK_REPLIES[lang] || FALLBACK_REPLIES.English)(n)
 
 const normalizeName = (name = '') => name.toLowerCase()
+  .replace(/pradhan mantri/g, 'pm').replace(/[-_]/g, ' ')
   .replace(/\s+(tn|tamilnadu|tamil nadu|ap|andhra|telangana|karnataka|kerala|maharashtra|gujarat|punjab|haryana|odisha|bihar|rajasthan|wb|up|mp|cg|jh|uk|hp|goa|delhi|assam)$/i, '')
   .replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim()
 

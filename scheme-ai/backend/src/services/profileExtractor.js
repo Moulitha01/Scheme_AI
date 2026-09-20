@@ -168,7 +168,7 @@ const TARGETS = [
 const stateRes = STATE_LIST.map((st) => [st, new RegExp(`\\b${esc(st.toLowerCase())}\\b`)])
 function mentionedStates(s) {
   const crit = (s.eligibilityCriteria || []).filter((c) => typeof c === 'string').join(' ').slice(0, 600)
-  const t = `${s.name || ''} ${s.ministry || ''} ${s.applyLink || ''} ${(s.description || '').slice(0, 600)} ${crit}`.toLowerCase()
+  const t = `${s.name || ''} ${s.ministry || ''} ${s.applyLink || ''} ${(s.description || '').slice(0, 600)} ${crit}`.toLowerCase().replace(/\s+/g, ' ')
   return stateRes.filter(([, re]) => re.test(t)).map(([st]) => st)
 }
 
@@ -205,7 +205,7 @@ export function matchSchemesByProfile(schemes, profile, userText = '', limit = 6
   const scored = []
   for (const scheme of schemes) {
     if (hardFilter && !passesHardFilters(scheme, profile)) continue
-    const t = `${scheme.name || ''} ${scheme.category || ''} ${(scheme.description || '').slice(0, 300)}`.toLowerCase()
+    const t = `${scheme.name || ''} ${scheme.category || ''} ${(scheme.description || '').slice(0, 300)}`.toLowerCase().replace(/\s+/g, ' ')
     const nameOnly = (scheme.name || '').toLowerCase()
 
     let score = 30
@@ -220,8 +220,10 @@ export function matchSchemesByProfile(schemes, profile, userText = '', limit = 6
     // aimed at a group the person hasn't said they belong to -> push down
     const head = `${scheme.name || ''} ${(scheme.description || '').slice(0, 160)}`.toLowerCase()
     const crit = (scheme.eligibilityCriteria || []).filter((c) => typeof c === 'string' && c.length <= 160).join(' ').slice(0, 250)
-    const rawHead = `${scheme.name || ''} ${scheme.applyLink || ''} ${(scheme.description || '').slice(0, 160)} ${crit}`
+    const rawHead = `${scheme.name || ''} ${scheme.applyLink || ''} ${(scheme.description || '').slice(0, 160)} ${crit}`.replace(/\s+/g, ' ')
     for (const tg of TARGETS) if ((tg.re.test(nameOnly) || tg.raw?.test(rawHead)) && !tg.has(profile)) score -= (tg.pen || 35)
+    // schemes for entrepreneurs / start-ups are a weak fit for farmers, students, wage workers
+    if (profile.occupation && profile.occupation !== 'business' && /entrepreneur|start-?up|first generation|msme/.test(`${nameOnly} ${crit}`.toLowerCase())) score -= 30
     let kw = 0
     for (const w of words) {
       if (nameOnly.includes(w)) kw += 8
@@ -229,7 +231,8 @@ export function matchSchemesByProfile(schemes, profile, userText = '', limit = 6
     }
     score += Math.min(kw, 24)
     score += Math.round((scheme._searchScore || 0) * 20)
-
+        // prefer entries that actually have benefit details stored
+    if (scheme.benefit && !/check official|see official/i.test(scheme.benefit)) score += 8
     if (/ayushman|pmjay/.test(t)) score = Math.max(score, 55)
     if (/mgnrega/.test(t) && profile.state) score = Math.max(score, 52)
 

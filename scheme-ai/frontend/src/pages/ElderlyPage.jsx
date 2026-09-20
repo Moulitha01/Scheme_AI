@@ -3,12 +3,55 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useLanguage } from '../context/LanguageContext'
+import { speakBhashini, speakBrowser, stopSpeaking } from '../services/tts'
 
 // Voice/speech-recognition codes, keyed by the SAME codes used in
 // LanguageContext (en, hi, ta, te, bn, mr, kn, gu, ml, pa, ur, or).
 const VOICE_CODE = {
   en: 'en-IN', hi: 'hi-IN', ta: 'ta-IN', te: 'te-IN', bn: 'bn-IN', mr: 'mr-IN',
   kn: 'kn-IN', gu: 'gu-IN', ml: 'ml-IN', pa: 'pa-IN', ur: 'ur-IN', or: 'or-IN',
+}
+
+// ── NEW: records the microphone and stops by itself after ~1.6s of silence ──
+// (replaces the browser SpeechRecognition, which is weak for Indian languages)
+async function startRecorder({ onAutoStop, silenceMs = 1600, maxMs = 15000 }) {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
+  const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find(m => window.MediaRecorder.isTypeSupported(m))
+  const mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined)
+  const chunks = []
+  mr.ondataavailable = e => { if (e.data.size) chunks.push(e.data) }
+
+  const ctx = new (window.AudioContext || window.webkitAudioContext)()
+  const analyser = ctx.createAnalyser()
+  analyser.fftSize = 512
+  ctx.createMediaStreamSource(stream).connect(analyser)
+  const buf = new Uint8Array(analyser.fftSize)
+
+  let heard = false, lastLoud = Date.now(), stopped = false, fired = false
+  const t0 = Date.now()
+  const tick = setInterval(() => {
+    analyser.getByteTimeDomainData(buf)
+    let peak = 0
+    for (const v of buf) peak = Math.max(peak, Math.abs(v - 128))
+    if (peak / 128 > 0.06) { heard = true; lastLoud = Date.now() }
+    const quiet = heard && Date.now() - lastLoud > silenceMs
+    if (!stopped && !fired && (quiet || Date.now() - t0 > maxMs)) { fired = true; onAutoStop?.() }
+  }, 100)
+
+  const stop = () => new Promise(resolve => {
+    if (stopped) return resolve(null)
+    stopped = true
+    clearInterval(tick)
+    mr.onstop = () => {
+      stream.getTracks().forEach(tr => tr.stop())
+      ctx.close()
+      resolve({ blob: new Blob(chunks, { type: mr.mimeType || 'audio/webm' }), heardSpeech: heard })
+    }
+    if (mr.state !== 'inactive') mr.stop(); else mr.onstop()
+  })
+
+  mr.start()
+  return { stop }
 }
 
 export default function ElderlyPage() {
@@ -20,44 +63,88 @@ export default function ElderlyPage() {
   const [schemes, setSchemes] = useState([])
   const [loading, setLoading] = useState(false)
   const [sessionId, setSessionId] = useState(null)
+  // Same name as before so the JSX below is untouched: it now holds the recorder controller
   const recognitionRef = useRef(null)
+  const speechRef = useRef('')   // cleaned text (no symbols/emoji) for the voice
 
   const voiceCode = VOICE_CODE[languageCode] || VOICE_CODE.en
 
+  useEffect(() => () => stopSpeaking(), [])
+
   useEffect(() => {
     if (reply) {
-      const u = new SpeechSynthesisUtterance(reply)
-      u.lang = voiceCode; u.rate = 0.82; u.pitch = 1.1
-      window.speechSynthesis.cancel()
-      window.speechSynthesis.speak(u)
+      const text = speechRef.current || reply
+      // Urdu isn't supported by the Bhashini proxy (it would be read in Hindi) -> browser voice
+      if (languageCode === 'ur') speakBrowser(text, languageCode)
+      else speakBhashini(text, languageCode)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reply])
 
-  const startRecording = () => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SR) return
-    const r = new SR()
-    r.lang = voiceCode; r.interimResults = false
-    r.onresult = async (e) => {
-      const text = e.results[0][0].transcript
+  const startRecording = async () => {
+    stopSpeaking()   // don't let the app hear its own voice
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+      speechRef.current = ''
+      setReply(t('elderly.errorMsg', 'Sorry, please try again.'))
+      return
+    }
+    try {
+      const ctl = { finish: null }
+      const rec = await startRecorder({ onAutoStop: () => ctl.finish?.() })
+      let finishing = false
+      ctl.finish = async () => {
+        if (finishing) return
+        finishing = true
+        setRecording(false)
+        const out = await rec.stop()
+        if (out?.heardSpeech) await transcribeAndSend(out.blob)
+      }
+      recognitionRef.current = { stop: ctl.finish }
+      setRecording(true)
+    } catch {
+      setRecording(false)
+      speechRef.current = ''
+      setReply(t('elderly.errorMsg', 'Sorry, please try again.'))
+    }
+  }
+
+  // audio -> Whisper (backend /api/stt) -> chat
+  const transcribeAndSend = async (blob) => {
+    setLoading(true)
+    try {
+      const fd = new FormData()
+      fd.append('audio', blob, 'speech.webm')
+      fd.append('lang', languageCode)
+      const { data } = await axios.post('/api/stt', fd)
+      const text = (data.text || '').trim()
+      if (!text) {
+        setLoading(false)
+        speechRef.current = ''
+        setReply(t('elderly.errorMsg', 'Sorry, please try again.'))
+        return
+      }
       setTranscript(text)
       await sendMessage(text)
+    } catch {
+      setLoading(false)
+      speechRef.current = ''
+      setReply(t('elderly.errorMsg', 'Sorry, please try again.'))
     }
-    r.onstart = () => setRecording(true)
-    r.onend = () => setRecording(false)
-    recognitionRef.current = r
-    r.start()
   }
 
   const sendMessage = async (text) => {
     setLoading(true)
     try {
-      const { data } = await axios.post('/api/chat/message', { message: text, language: language.name, languageCode, sessionId })
+      const { data } = await axios.post('/api/chat/message', {
+        message: text, language: language.name, languageCode, sessionId,
+        mode: 'voice', confirmed: true,
+      })
       setSessionId(data.sessionId)
+      speechRef.current = data.speech || data.reply
       setReply(data.reply)
       setSchemes(data.schemes || [])
     } catch {
+      speechRef.current = ''
       setReply(t('elderly.errorMsg', 'Sorry, please try again.'))
     } finally { setLoading(false) }
   }

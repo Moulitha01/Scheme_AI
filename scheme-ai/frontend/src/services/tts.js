@@ -16,6 +16,8 @@ const VOICE_LANG = {
   en: 'en-IN',
   ml: 'ml-IN',
   pa: 'pa-IN',
+  ur: 'ur-IN',
+  or: 'or-IN',
 }
 
 // Per-language speech rate for browser fallback
@@ -31,6 +33,8 @@ const BROWSER_RATE = {
   en: 0.88,
   ml: 0.78,
   pa: 0.85,
+  ur: 0.85,
+  or: 0.85,
 }
 
 // Audio cache — avoids re-fetching same text+lang combos
