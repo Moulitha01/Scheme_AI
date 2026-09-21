@@ -44,11 +44,25 @@ const cleanLink = (u = '') => {
   return m ? m[0].replace(/(Sources|References|Feedback|Questions|You)$/, '') : ''
 }
 
+// Crawled pages glue page text onto names ("...ScientistsAre you sure you want to sign") and benefits ("RequiredFrequently")
+const cleanName = (n = '') => String(n)
+  .replace(/\s*(Are you( sure.*)?|Something went wrong.*|Do you want to.*|Sign in.*)$/i, '')
+  .replace(/\s+/g, ' ').trim()
+
+const cleanBenefit = (b = '') => {
+  const t = String(b).replace(/\s+/g, ' ').trim()
+  if (!t || /^(check|see) official portal$/i.test(t)) return ''
+  const hasMoney = /[₹\d]/.test(t)
+  if (!hasMoney && /[a-z][A-Z]/.test(t) && t.length < 80) return ''        // glued headings
+  if (!hasMoney && /frequently|documents required|^process/i.test(t)) return ''
+  return t
+}
+
 const toCard = (s) => ({
   id: s._id ? String(s._id) : undefined,
-  name: s.name || 'Unknown Scheme',
+  name: cleanName(s.name) || 'Unknown Scheme',
   ministry: s.ministry || (s.state && s.state !== 'Central' ? `Government of ${s.state}` : 'Government of India'),
-  benefit: s.benefit || 'Check official portal',
+  benefit: cleanBenefit(s.benefit),
   category: s.category || 'Other',
   state: s.state || 'Central',
   eligibility: Math.min(Math.max(s.matchScore || 45, 40), 95), // 0-100 score the UI already uses

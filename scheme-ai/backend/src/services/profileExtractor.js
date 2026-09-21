@@ -199,6 +199,13 @@ function passesHardFilters(s, p) {
   return true
 }
 
+// Schemes aimed at a specific kind of person. Shown only when the person's work (or stated need) matches.
+const AUDIENCES = [
+  { re: /scientist|researcher|research fellow|fellowship|post.?doc/, jobs: [], needs: [] },
+  { re: /kamga+r|shramik|labou?r|worker|hamaal|domestic|construction/, jobs: ['daily_wage'], needs: ['employment'] },
+  { re: /\b(kisan|farmer|krishi|agricultur\w*)\b/, jobs: ['farmer'], needs: ['agriculture'] },
+]
+
 export function matchSchemesByProfile(schemes, profile, userText = '', limit = 6, { minScore = 0, hardFilter = true } = {}) {
   const words = (userText || '').toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3 && !STOP.has(w))
 
@@ -228,6 +235,10 @@ export function matchSchemesByProfile(schemes, profile, userText = '', limit = 6
     if (profile.need_category?.includes('pension') && /pension/.test(nameOnly)) score += 35
     // national flagship pension schemes
     if ((profile.is_widow || profile.is_disabled || (Number.isFinite(profile.age) && profile.age >= 60)) && /indira gandhi national|ignwps|ignoaps|ignda|nsap/.test(nameOnly)) score += 20
+    // niche audiences: weak fit unless the person's work (or need) matches
+    for (const a of AUDIENCES) {
+      if (a.re.test(nameOnly) && !a.jobs.includes(profile.occupation) && !a.needs.some((n) => profile.need_category?.includes(n))) score -= profile.occupation ? 80 : 60
+    }
     let kw = 0
     for (const w of words) {
       if (nameOnly.includes(w)) kw += 8
