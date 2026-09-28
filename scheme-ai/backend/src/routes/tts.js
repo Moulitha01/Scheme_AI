@@ -231,16 +231,3 @@ router.post('/synthesize', limiter, async (req, res) => {
 // ---------------------------------------------------------------------------
 // GET /api/tts/voices : supported languages, voice and playback rate hint
 // ---------------------------------------------------------------------------
-router.get('/voices', (req, res) => {
-  res.json({
-    supported: Object.keys(LANG_TO_BHASHINI),
-    voices: Object.entries(LANG_VOICE).map(([code, voice]) => ({
-      code,
-      language: LANG_TO_BHASHINI[code],
-      voice,
-      rate: LANG_RATE[code], // apply in the browser: audio.playbackRate = rate
-    })),
-  })
-})
-
-export default router
