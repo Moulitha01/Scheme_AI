@@ -417,7 +417,7 @@ export async function crawlGovernmentSchemes({ forceRefresh = false } = {}) {
 
     // Step 2: Weekly sitemap diff — only fetch new/removed schemes
     if (forceRefresh || shouldCheckSitemap()) {
-      logger.info('🗺️ bbbb Running weekly sitemap check...')
+      logger.info('🗺️Running weekly sitemap check...')
       await checkSitemapForUpdates()
     }
 
