@@ -206,12 +206,35 @@ const AUDIENCES = [
   { re: /\b(kisan|farmer|krishi|agricultur\w*)\b/, jobs: ['farmer'], needs: ['agriculture'] },
 ]
 
+// Schemes whose eligibility is really about someone ELSE'S status (a parent's child, a family's
+// daughter, a spouse) rather than the applicant's own situation. These need an explicit signal
+// before they are shown at all -- being "not excluded" isn't enough, unlike AUDIENCES above.
+const DEPENDENT_SCHEMES = [
+  // about a daughter/child/ward, not the applicant herself
+  { re: /\bdaughter'?s?\b|\bgirl child\b|\bgirl\/girl children\b|\bone girl\b|\btwo girls?\b|\bsukanya\b|\bward'?s? (marriage|education|wedding)\b/i,
+    needs: (p) => (p.family_size && p.family_size > 0) || p.need_category?.includes('education') },
+  // about being a widow specifically (marriage/support schemes FOR widows or their dependents)
+  { re: /\bwidows?\b/i, needs: (p) => !!p.is_widow },
+  // family planning / sterilization incentive schemes
+  { re: /\bfamily planning\b|\bsterili[sz]ation\b/i, needs: () => false },
+  // conditioned on being employed / working, when occupation is unknown or clearly not that
+  { re: /\bworking women\b|\bwomen employees?\b|\bwomen workers?\b/i,
+    needs: (p) => !!p.occupation && p.occupation !== 'unemployed' && p.occupation !== 'student' },
+]
+function passesDependentFilter(name, profile) {
+  for (const d of DEPENDENT_SCHEMES) {
+    if (d.re.test(name) && !d.needs(profile)) return false
+  }
+  return true
+}
+
 export function matchSchemesByProfile(schemes, profile, userText = '', limit = 6, { minScore = 0, hardFilter = true } = {}) {
   const words = (userText || '').toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3 && !STOP.has(w))
 
   const scored = []
   for (const scheme of schemes) {
     if (hardFilter && !passesHardFilters(scheme, profile)) continue
+    if (hardFilter && !passesDependentFilter(scheme.name || '', profile)) continue
     const t = `${scheme.name || ''} ${scheme.category || ''} ${(scheme.description || '').slice(0, 300)}`.toLowerCase().replace(/\s+/g, ' ')
     const nameOnly = (scheme.name || '').toLowerCase()
 

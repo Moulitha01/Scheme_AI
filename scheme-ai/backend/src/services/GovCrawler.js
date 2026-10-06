@@ -448,6 +448,7 @@ export async function forceRefreshSchemes() {
 
 export function startWeeklyCrawlCron() {
   cron.schedule('0 2 * * 0', async () => {
+    
     logger.info('⏰ Weekly cron: checking sitemap for updates...')
     await crawlGovernmentSchemes({ forceRefresh: true })
   })
