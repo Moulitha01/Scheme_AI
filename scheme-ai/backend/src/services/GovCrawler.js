@@ -429,7 +429,7 @@ export async function crawlGovernmentSchemes({ forceRefresh = false } = {}) {
     const apiSchemes = await fetchMySchemeAPI()
     if (apiSchemes.length > 0) {
       logger.info(`  📡 MyScheme API: ${apiSchemes.length} additional schemes`)
-      await ingestSchemes(apiSchemes)
+      await ingestSchemes(apiSchemes
     }
 
     // Log total
